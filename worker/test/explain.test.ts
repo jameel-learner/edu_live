@@ -342,3 +342,41 @@ describe("handleExplain error handling", () => {
     expect(body.videoSearchUrl).toContain(encodeURIComponent("Acid & Base reactions"));
   });
 });
+
+describe("handleExplain system prompt", () => {
+  it("tells the model not to redraw a [Figure: ...] marker in context as text/table notation", async () => {
+    let capturedSystemPrompt: string | undefined;
+    const env = makeEnv({
+      VECTORIZE: {
+        query: async () => ({
+          matches: [
+            {
+              score: 0.9,
+              metadata: {
+                text: "[Figure: skeletal structural formula of 1-chloropropane]",
+                page: 4,
+                pageEnd: 4,
+                source: "chemistry.pdf",
+                chunkId: 2,
+                pageImageKey: "chemistry.pdf/4.png",
+              },
+            },
+          ],
+        }),
+      },
+      AI: {
+        run: async (model: string, opts?: { messages?: { role: string; content: string }[] }) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          capturedSystemPrompt = opts?.messages?.find((m) => m.role === "system")?.content;
+          return { response: `\`\`\`json\n${VALID_LLM_JSON}\n\`\`\`` };
+        },
+      },
+    });
+
+    await handleExplain(makeRequest({ concept: "1-chloropropane structure" }), env, noopCtx());
+
+    expect(capturedSystemPrompt).toMatch(/\[Figure:/);
+    expect(capturedSystemPrompt).toMatch(/do not (try to )?(redraw|reproduce|transcribe)/i);
+  });
+});

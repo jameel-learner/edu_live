@@ -40,6 +40,12 @@ Length discipline (hard ceiling, not a target):
 
 ${groundingInstruction}
 
+Figures in the context: if the provided context contains a '[Figure: ...]' marker (a description of a
+diagram, structural formula, or image from the source material), do not try to redraw, reproduce, or
+transcribe that figure as text, ASCII art, or a table cell - a real image of that page is shown to the
+student separately. Just refer to it in prose (e.g. "see the structure shown above") and use its
+description, not an attempted drawing of it, anywhere you'd otherwise need the figure's content.
+
 ${RESPONSE_SCHEMA_INSTRUCTIONS}`;
 }
 

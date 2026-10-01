@@ -27,7 +27,11 @@ Policy:
   true from general knowledge.
 - If the context doesn't answer the question, say so clearly instead of guessing.
 - Name the source document (with page number) or web page you used.
-- Keep answers concise unless the question needs detail.`;
+- Keep answers concise unless the question needs detail.
+- If the context contains a '[Figure: ...]' marker (a description of a diagram, structural formula, or
+  image from the source material), do not try to redraw, reproduce, or transcribe that figure as text or
+  ASCII art - a real image of that page is shown to the student separately. Refer to it in prose using
+  its description instead.`;
 
 export type AnswerStyle = "auto" | "short" | "detailed";
 

@@ -61,6 +61,31 @@ describe("parseEnrichedPages", () => {
 });
 
 describe("enrichPdfToMarkdown", () => {
+  it("instructs the model to flag chemical structural/skeletal diagrams as figures, not as transcribable text or LaTeX", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: "<<<PAGE 1>>>\nx\n<<<PAGE 2>>>\nx\n<<<PAGE 3>>>\nx" } }] }), {
+        status: 200,
+      });
+    };
+
+    try {
+      const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake bytes").buffer;
+      const env = makeEnv();
+      await enrichPdfToMarkdown(pdfBytes, FALLBACK, env, { ingestionModelSlug: "vendor/model" });
+
+      const body = capturedBody as unknown as { messages: { content: { type: string; text?: string }[] }[] };
+      const promptText = body.messages[0].content.find((c) => c.type === "text")?.text ?? "";
+      expect(promptText).toMatch(/structural|skeletal/i);
+      expect(promptText).toMatch(/\[Figure:/);
+      expect(promptText).toMatch(/table cell/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("sends the PDF as a base64 file attachment to the configured model and returns parsed pages", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     const originalFetch = globalThis.fetch;

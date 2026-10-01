@@ -19,8 +19,17 @@ function buildPrompt(): string {
   return (
     "You will be given a PDF document. For EVERY page in the document, output its content as " +
     "Markdown, preserving meaning precisely:\n" +
-    "- Mathematical formulas and equations: write as LaTeX, delimited with $...$ (inline) or $$...$$ (block).\n" +
-    "- Tables: reproduce as Markdown tables (with header row and alignment row).\n" +
+    "- Mathematical formulas and equations (algebra, calculus, physics equations - real typeset math): " +
+    "write as LaTeX, delimited with $...$ (inline) or $$...$$ (block).\n" +
+    "- Chemical structural or skeletal formulas, molecular structure drawings, and reaction mechanism " +
+    "diagrams (bond-line drawings, displayed/skeletal formulas with atoms and bonds drawn as a shape) are " +
+    "NOT math and must NOT be transcribed as text or LaTeX - describe them like any other figure, prefixed " +
+    "with '[Figure: ' (e.g. '[Figure: skeletal structural formula of 1-chloropropane, a three-carbon chain " +
+    "with a chlorine on the end carbon]'). Only a plain inline notation the source text itself writes as " +
+    "running text (e.g. 'CH3COOH' typed in a sentence) should be reproduced verbatim as text.\n" +
+    "- Tables: reproduce as Markdown tables (with header row and alignment row). If a table cell contains a " +
+    "diagram, structural formula, or image rather than plain text, that cell's content is still '[Figure: " +
+    "...]' using the same rule as any other figure - never attempt to draw or transcribe it as table text.\n" +
     "- Images, diagrams, charts, or figures: describe their content in enough detail to answer a " +
     "question about them, prefixed with '[Figure: '.\n" +
     "- All other text: reproduce as close to verbatim as possible.\n\n" +

@@ -422,3 +422,40 @@ describe("handleChat pageImageKey passthrough", () => {
     expect(body.docSources[0].pageImageKey).toBeNull();
   });
 });
+
+describe("handleChat system prompt", () => {
+  it("tells the model not to redraw a [Figure: ...] marker in context as text", async () => {
+    let capturedSystemPrompt: string | undefined;
+    const env = makeEnv({
+      VECTORIZE: {
+        query: async () => ({
+          matches: [
+            {
+              score: 0.9,
+              metadata: {
+                text: "[Figure: skeletal structural formula of 1-chloropropane]",
+                page: 4,
+                pageEnd: 4,
+                source: "chemistry.pdf",
+                chunkId: 2,
+              },
+            },
+          ],
+        }),
+      },
+      AI: {
+        run: async (model: string, opts?: { messages?: { role: string; content: string }[] }) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          capturedSystemPrompt = opts?.messages?.find((m) => m.role === "system")?.content;
+          return { response: "an answer" };
+        },
+      },
+    });
+
+    await handleChat(makeChatRequest("what is the structure of 1-chloropropane"), env, noopCtx());
+
+    expect(capturedSystemPrompt).toMatch(/\[Figure:/);
+    expect(capturedSystemPrompt).toMatch(/do not (try to )?(redraw|reproduce|transcribe)/i);
+  });
+});
