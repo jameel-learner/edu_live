@@ -431,4 +431,58 @@ describe("handleIngest page screenshot capture", () => {
     expect(launchScreenshotBrowser).not.toHaveBeenCalled();
     expect(capturePageScreenshot).not.toHaveBeenCalled();
   });
+
+  it("also captures a screenshot for a page whose enriched text looks like a garbled structural formula, even with no [Figure: marker", async () => {
+    vi.mocked(capturePageScreenshot).mockClear();
+    vi.mocked(launchScreenshotBrowser).mockClear();
+    vi.mocked(enrichPdfToMarkdown).mockResolvedValueOnce([
+      { page: 1, text: "Plain prose, no figures here." },
+      {
+        page: 2,
+        text: "| Functional group | Example |\n| --- | --- |\n| Halogen | H-C-C-C-Cl |\n",
+      },
+    ]);
+
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    expect(launchScreenshotBrowser).toHaveBeenCalledTimes(1);
+    expect(capturePageScreenshot).toHaveBeenCalledTimes(1);
+    const [, , pageArg] = vi.mocked(capturePageScreenshot).mock.calls[0];
+    expect(pageArg).toBe(2);
+  });
+
+  it("chunks the sanitized [Figure: text, not the garbled formula, so retrieval/chat never see the raw pseudo-text", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockResolvedValueOnce([
+      { page: 1, text: "Plain prose, no figures here." },
+      {
+        page: 2,
+        text: "| Functional group | Example |\n| --- | --- |\n| Halogen | H-C-C-C-Cl |\n",
+      },
+    ]);
+
+    const upsertedVectors: { metadata?: { text?: string } }[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      VECTORIZE: {
+        upsert: async (vectors: { metadata?: { text?: string } }[]) => {
+          upsertedVectors.push(...vectors);
+          return {};
+        },
+      } as unknown as VectorizeIndex,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    const allChunkedText = upsertedVectors.map((v) => v.metadata?.text ?? "").join(" ");
+    expect(allChunkedText).not.toContain("H-C-C-C-Cl");
+    expect(allChunkedText).toMatch(/\[Figure:/);
+  });
 });

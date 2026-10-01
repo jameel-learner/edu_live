@@ -5,6 +5,7 @@ import { chunkVectorId } from "./vectorId";
 import { enrichPdfToMarkdown } from "./ingestionEnrichment";
 import { capturePageScreenshot, launchScreenshotBrowser } from "./pageScreenshot";
 import { getRuntimeConfig } from "./config";
+import { looksLikeGarbledStructuralFormula, sanitizeGarbledStructuralFormulas } from "./structuralFormulaDetection";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
 
@@ -85,6 +86,18 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
     enrichmentApplied = enrichedPages !== pages;
     pages = enrichedPages;
   }
+
+  // The explicit [Figure: marker is the primary signal (from the
+  // enrichment prompt), but vision models don't always follow it for a
+  // structural/skeletal chemistry diagram - this pattern-based fallback
+  // rewrites a page whose enriched text was garbled into pseudo-text back
+  // into a [Figure: marker, so (a) the real page image still gets captured
+  // below and (b) chat/explain never see or quote the raw garbled text, only
+  // the marker, which their prompts already know to treat as "see the image"
+  // rather than something to redraw. See structuralFormulaDetection.ts.
+  pages = pages.map((p) =>
+    looksLikeGarbledStructuralFormula(p.text) ? { ...p, text: sanitizeGarbledStructuralFormulas(p.text) } : p
+  );
 
   const pageImageKeys = new Map<number, string>();
   const figurePages = pages.filter((p) => p.text.includes("[Figure:")).map((p) => p.page);
