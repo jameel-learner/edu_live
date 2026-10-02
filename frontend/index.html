@@ -31,9 +31,13 @@
       <div class="mode-toggle" role="tablist">
         <button type="button" class="mode-btn active" data-mode="chat" role="tab" aria-selected="true">Chat</button>
         <button type="button" class="mode-btn" data-mode="explain" role="tab" aria-selected="false">Concept Explainer</button>
+        <button type="button" class="mode-btn" data-mode="questionPaper" role="tab" aria-selected="false">Question Paper</button>
       </div>
       <h2 id="chat-section-title">Ask a question</h2>
       <div id="chat-log"></div>
+      <div id="question-paper-placeholder" class="coming-soon" hidden>
+        Question Paper generation is coming soon.
+      </div>
       <form id="chat-form">
         <select id="answer-style-select" title="Answer length">
           <option value="auto" selected>Auto</option>

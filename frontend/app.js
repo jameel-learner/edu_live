@@ -26,11 +26,13 @@ const THINKING_PHRASES = ["Thinking", "Searching your notes", "Checking sources"
 
 const modeButtons = document.querySelectorAll(".mode-btn");
 const sectionTitle = document.getElementById("chat-section-title");
+const questionPaperPlaceholder = document.getElementById("question-paper-placeholder");
 let currentMode = "chat";
 
 const MODE_COPY = {
   chat: { title: "Ask a question", placeholder: "Ask a science or maths question..." },
   explain: { title: "Explain a concept", placeholder: "Enter a concept, e.g. Newton's second law" },
+  questionPaper: { title: "Question Paper", placeholder: "" },
 };
 
 modeButtons.forEach((btn) => {
@@ -43,6 +45,13 @@ modeButtons.forEach((btn) => {
     sectionTitle.textContent = MODE_COPY[currentMode].title;
     questionInput.placeholder = MODE_COPY[currentMode].placeholder;
     answerStyleSelect.style.display = currentMode === "chat" ? "" : "none";
+
+    // Question Paper has no backend yet - show a placeholder card instead
+    // of the chat form/log, so there's nothing to submit until it's built.
+    const isQuestionPaper = currentMode === "questionPaper";
+    questionPaperPlaceholder.hidden = !isQuestionPaper;
+    chatLog.hidden = isQuestionPaper;
+    chatForm.hidden = isQuestionPaper;
   });
 });
 

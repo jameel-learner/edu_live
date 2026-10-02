@@ -210,6 +210,12 @@ button:focus-visible, select:focus-visible, input:focus-visible {
   text-align: left;
 }
 
+.coming-soon {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
 @media (max-width: 640px) {
   .app-main { padding: 1rem; }
   .app-header-inner { flex-direction: column; }
