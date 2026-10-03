@@ -229,4 +229,8 @@ button:focus-visible, select:focus-visible, input:focus-visible {
 .qp-picker { display: flex; flex-direction: column; gap: 8px; max-width: 400px; }
 #qp-chapter-list { border: 1px solid var(--border, #ccc); padding: 8px; }
 .qp-actions { display: flex; gap: 12px; margin-bottom: 16px; }
-#qp-result img { max-width: 100%; margin-top: 8px; }
+#qp-result img { display: block; max-width: 100%; margin-top: 8px; }
+#qp-result .qp-latex { font-family: "IBM Plex Mono", monospace; white-space: pre-wrap; padding: 6px 8px; margin: 6px 0; border: 1px solid var(--border, #ccc); border-radius: 4px; overflow-x: auto; }
+#qp-result .qp-table { border-collapse: collapse; margin: 8px 0; max-width: 100%; display: block; overflow-x: auto; }
+#qp-result .qp-table th, #qp-result .qp-table td { border: 1px solid var(--border, #ccc); padding: 4px 8px; text-align: left; }
+#qp-generate-btn:disabled, #qp-answer-key-btn:disabled { opacity: 0.6; cursor: progress; }

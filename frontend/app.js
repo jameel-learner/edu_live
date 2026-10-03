@@ -35,22 +35,52 @@ const qpGenerateBtn = document.getElementById("qp-generate-btn");
 const qpResult = document.getElementById("qp-result");
 
 let qpCatalog = [];
+let qpCatalogLoading = false;
+
+// Question-paper content comes from an LLM/RAG pipeline and catalog values
+// from upload metadata - escape before every innerHTML interpolation.
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 async function loadQuestionPaperCatalog() {
-  if (qpCatalog.length > 0) return;
-  const response = await fetch(`${WORKER_URL}/question-paper/catalog`);
-  const body = await response.json();
-  qpCatalog = body.documents || [];
+  if (qpCatalog.length > 0 || qpCatalogLoading) return;
+  qpCatalogLoading = true;
+  try {
+    const response = await fetch(`${WORKER_URL}/question-paper/catalog`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      qpResult.textContent = `Could not load chapters: ${body.error ?? `server error (${response.status})`}`;
+      return;
+    }
+    qpCatalog = body.documents || [];
+    if (qpCatalog.length === 0) {
+      qpResult.textContent = "No chapters are available for question papers yet.";
+    }
 
-  const subjects = [...new Set(qpCatalog.map((d) => d.subject))];
-  qpSubjectSelect.innerHTML = subjects.map((s) => `<option value="${s}">${s}</option>`).join("");
-  renderClassOptions();
+    const subjects = [...new Set(qpCatalog.map((d) => d.subject))];
+    qpSubjectSelect.innerHTML = subjects
+      .map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`)
+      .join("");
+    renderClassOptions();
+  } catch (err) {
+    qpResult.textContent = `Could not load chapters - could not reach the server (${err.message}). Switch tabs to retry.`;
+  } finally {
+    qpCatalogLoading = false;
+  }
 }
 
 function renderClassOptions() {
   const subject = qpSubjectSelect.value;
   const classes = [...new Set(qpCatalog.filter((d) => d.subject === subject).map((d) => d.class))];
-  qpClassSelect.innerHTML = classes.map((c) => `<option value="${c}">${c}</option>`).join("");
+  qpClassSelect.innerHTML = classes
+    .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
+    .join("");
   renderChapterCheckboxes();
 }
 
@@ -63,7 +93,7 @@ function renderChapterCheckboxes() {
     chapters
       .map(
         (c) =>
-          `<label><input type="checkbox" value="${c.filename}" /> ${c.chapter}</label>`
+          `<label><input type="checkbox" value="${escapeHtml(c.filename)}" /> ${escapeHtml(c.chapter)}</label>`
       )
       .join("");
 }
@@ -78,61 +108,99 @@ qpGenerateBtn.addEventListener("click", async () => {
     return;
   }
 
+  // In-flight guard: a double-click would otherwise fire two requests and
+  // whichever landed last (possibly an error) would overwrite the display.
+  if (qpGenerateBtn.disabled) return;
+  qpGenerateBtn.disabled = true;
+  const originalLabel = qpGenerateBtn.textContent;
+  qpGenerateBtn.textContent = "Generating...";
   qpResult.textContent = "Generating...";
-  const response = await fetch(`${WORKER_URL}/question-paper/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      subject: qpSubjectSelect.value,
-      class: qpClassSelect.value,
-      chapterFilenames,
-      marksTotal: Number(qpMarksSelect.value),
-    }),
-  });
+  try {
+    const response = await fetch(`${WORKER_URL}/question-paper/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject: qpSubjectSelect.value,
+        class: qpClassSelect.value,
+        chapterFilenames,
+        marksTotal: Number(qpMarksSelect.value),
+      }),
+    });
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({ error: "Something went wrong." }));
-    qpResult.textContent = body.error;
-    return;
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      qpResult.textContent = body.error || `Something went wrong (${response.status}). Please try again.`;
+      return;
+    }
+
+    const body = await response.json();
+    renderQuestionPaper(body.id, body.paper);
+  } catch (err) {
+    qpResult.textContent = `Could not generate the question paper - could not reach the server (${err.message}).`;
+  } finally {
+    qpGenerateBtn.disabled = false;
+    qpGenerateBtn.textContent = originalLabel;
   }
-
-  const body = await response.json();
-  renderQuestionPaper(body.id, body.paper);
 });
+
+function renderQuestionTable(table) {
+  if (!table || !Array.isArray(table.headers) || !Array.isArray(table.rows)) return "";
+  const head = `<tr>${table.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
+  const body = table.rows
+    .map((row) => `<tr>${(Array.isArray(row) ? row : []).map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
+    .join("");
+  return `<table class="qp-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
+function renderQuestionItem(q) {
+  const imageKey = q.pageImageKey || q.generatedImageKey;
+  const image = imageKey
+    ? `<img src="${WORKER_URL}/images/${encodeURIComponent(imageKey)}" alt="diagram" />`
+    : "";
+  const latex = q.latex ? `<pre class="qp-latex">${escapeHtml(q.latex)}</pre>` : "";
+  const marks = Number(q.marks);
+  return (
+    `<li>${escapeHtml(q.text)} <em>[${escapeHtml(q.marks)} mark${marks === 1 ? "" : "s"}]</em>` +
+    `${latex}${renderQuestionTable(q.table)}${image}</li>`
+  );
+}
 
 function renderQuestionPaper(paperId, paper) {
   const sectionsHtml = paper.sections
-    .map(
-      (s) =>
-        `<h3>Section ${s.section}</h3><ol>${s.questions
-          .map((q) => {
-            const image = q.pageImageKey || q.generatedImageKey
-              ? `<img src="${WORKER_URL}/images/${encodeURIComponent(q.pageImageKey || q.generatedImageKey)}" alt="diagram" />`
-              : "";
-            return `<li>${q.text} <em>[${q.marks} mark${q.marks === 1 ? "" : "s"}]</em>${image}</li>`;
-          })
-          .join("")}</ol>`
-    )
+    .map((s) => `<h3>Section ${escapeHtml(s.section)}</h3><ol>${s.questions.map(renderQuestionItem).join("")}</ol>`)
     .join("");
 
+  const encodedId = encodeURIComponent(paperId);
   qpResult.innerHTML =
     `<div class="qp-actions">` +
-    `<a href="${WORKER_URL}/question-paper/${paperId}/pdf" target="_blank">Download PDF</a>` +
+    `<a href="${WORKER_URL}/question-paper/${encodedId}/pdf" target="_blank">Download PDF</a>` +
     `<button type="button" id="qp-answer-key-btn">Generate Answer Key</button>` +
     `</div>${sectionsHtml}<div id="qp-answer-key-result"></div>`;
 
-  document.getElementById("qp-answer-key-btn").addEventListener("click", async () => {
+  const answerKeyBtn = document.getElementById("qp-answer-key-btn");
+  answerKeyBtn.addEventListener("click", async () => {
+    if (answerKeyBtn.disabled) return;
     const akResult = document.getElementById("qp-answer-key-result");
+    answerKeyBtn.disabled = true;
+    const originalLabel = answerKeyBtn.textContent;
+    answerKeyBtn.textContent = "Generating answer key...";
     akResult.textContent = "Generating answer key...";
-    const response = await fetch(`${WORKER_URL}/question-paper/${paperId}/answer-key`, { method: "POST" });
-    if (!response.ok) {
-      akResult.textContent = "Could not generate the answer key.";
-      return;
+    try {
+      const response = await fetch(`${WORKER_URL}/question-paper/${encodedId}/answer-key`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(body.answerKey?.entries)) {
+        akResult.textContent = body.error || "Could not generate the answer key. Please try again.";
+        return;
+      }
+      akResult.innerHTML =
+        `<h3>Answer Key</h3><ol>${body.answerKey.entries.map((e) => `<li>${escapeHtml(e.answer)}</li>`).join("")}</ol>` +
+        `<a href="${WORKER_URL}/question-paper/${encodedId}/answer-key-pdf" target="_blank">Download Answer Key PDF</a>`;
+    } catch (err) {
+      akResult.textContent = `Could not generate the answer key - could not reach the server (${err.message}).`;
+    } finally {
+      answerKeyBtn.disabled = false;
+      answerKeyBtn.textContent = originalLabel;
     }
-    const body = await response.json();
-    akResult.innerHTML =
-      `<h3>Answer Key</h3><ol>${body.answerKey.entries.map((e) => `<li>${e.answer}</li>`).join("")}</ol>` +
-      `<a href="${WORKER_URL}/question-paper/${paperId}/answer-key-pdf" target="_blank">Download Answer Key PDF</a>`;
   });
 }
 
