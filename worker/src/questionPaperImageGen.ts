@@ -33,7 +33,7 @@ export async function generateDiagramImage(
   try {
     const result = await env.AI.run(IMAGE_GEN_MODEL, { prompt: `Simple textbook-style diagram: ${description}` });
     const key = `question-papers/${paperId}/gen-${slotKey}.png`;
-    await env.PDF_BUCKET.put(key, result as ArrayBuffer, { httpMetadata: { contentType: "image/png" } });
+    await env.PDF_BUCKET.put(key, result, { httpMetadata: { contentType: "image/png" } });
     return { generatedImageKey: key };
   } catch (err) {
     console.error("question paper image-gen failed, falling back to text placeholder", err);
