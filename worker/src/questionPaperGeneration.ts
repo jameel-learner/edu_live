@@ -97,7 +97,7 @@ export function buildGenerationPrompt(
   const slotLines = chapterSlotsInOrder(chaptersWithSlots)
     .map(
       ({ slot: s, filename }, i) =>
-        `${i + 1}. chapter=${filename} section=${s.section} type=${s.questionType} marks=${s.marks} count=${s.count}${s.wantsDiagram ? " (set diagramNeeded=true for this slot's questions)" : ""}`
+        `${i + 1}. chapter=${filename} section=${s.section} type=${s.questionType} marks=${s.marks} count=${s.count}${s.wantsDiagram ? " (diagramNeeded: this slot's questions refer to a figure)" : ""}`
     )
     .join("\n");
 
@@ -109,10 +109,15 @@ export function buildGenerationPrompt(
     `Blueprint slots (fill exactly this many questions per slot, in order; draw each slot's questions from ` +
     `the source text of the chapter named on its line):\n${slotLines}\n\n` +
     `Source material:\n${sourceText}\n\n` +
+    `For a slot marked "set diagramNeeded=true", phrase the question naturally referring to "the given figure/diagram" ` +
+    `(as a real exam paper would) - do not describe the figure separately, since no image is shown to the student; ` +
+    `the question text alone must make sense on its own.\n` +
+    `The "latex" field is ONLY for an actual mathematical or chemical formula/equation (e.g. "V = IR", a structural ` +
+    `formula). NEVER put a plain-English description of a diagram, figure, or circuit into "latex" - if a question has ` +
+    `no formula, omit "latex" entirely.\n\n` +
     `Return JSON: {"questions": [{"section": string, "questionType": string, "marks": number, "text": string, ` +
-    `"latex"?: string, "table"?: {"headers": string[], "rows": string[][]}, "diagramNeeded"?: boolean, ` +
-    `"diagramDescription"?: string}]}. The questions array must contain exactly the total count across all slots, ` +
-    `in the same order as the slot list.`;
+    `"latex"?: string, "table"?: {"headers": string[], "rows": string[][]}}]}. The questions array must contain ` +
+    `exactly the total count across all slots, in the same order as the slot list.`;
 
   return { system, user };
 }
@@ -124,8 +129,6 @@ interface RawQuestion {
   text?: unknown;
   latex?: unknown;
   table?: unknown;
-  diagramNeeded?: unknown;
-  diagramDescription?: unknown;
 }
 
 /**
@@ -170,8 +173,10 @@ function isValidTable(t: unknown): t is { headers: string[]; rows: string[][] } 
 
 interface ParsedEntry {
   question: GeneratedQuestion;
-  diagramNeeded: boolean;
-  diagramDescription?: string;
+  // Taken from the blueprint slot, never from the LLM - wantsDiagram is
+  // already known deterministically before generation, so there's no
+  // reason to trust (or need) an LLM-echoed diagramNeeded field.
+  wantsDiagram: boolean;
 }
 
 function parseEntries(raw: string, orderedSlots: BlueprintSlot[]): ParsedEntry[] {
@@ -215,11 +220,7 @@ function parseEntries(raw: string, orderedSlots: BlueprintSlot[]): ParsedEntry[]
       ...(typeof q?.latex === "string" && q.latex ? { latex: q.latex } : {}),
       ...(isValidTable(q?.table) ? { table: q.table } : {}),
     };
-    return {
-      question,
-      diagramNeeded: q?.diagramNeeded === true,
-      ...(typeof q?.diagramDescription === "string" ? { diagramDescription: q.diagramDescription } : {}),
-    };
+    return { question, wantsDiagram: slot.wantsDiagram === true };
   });
 }
 
@@ -280,6 +281,23 @@ export async function generatePaper(
   const entries = parseEntries(result.text, orderedSlots);
   const paper = groupIntoPaper(entries, blueprint);
 
+  // Diagram imagery (both real ingested textbook screenshots and the
+  // generated-image fallback) is gated behind this single flag, currently
+  // off by default: in production, ingested page screenshots were
+  // frequently blank (a Browser Rendering timing issue, not something this
+  // module can fix) and the generated fallback produced nonsensical
+  // circuit/figure images - neither source is reliable yet. When re-enabled
+  // (after the screenshot pipeline is separately verified), this restores
+  // both the ingested-image and image-gen-fallback behavior together.
+  const placeholderNote = "\n\n(Refer to the diagram/figure in your textbook for this chapter.)";
+
+  if (!config.questionPaperImageGenEnabled) {
+    for (const { question, wantsDiagram } of entries) {
+      if (wantsDiagram) question.text += placeholderNote;
+    }
+    return paper;
+  }
+
   // Candidate ingested page images across the selected chapters. Not a
   // precise per-question source link (the LLM doesn't echo which chunk it
   // used); de-duplicated because overlapping chunks share a page, so without
@@ -296,25 +314,20 @@ export async function generatePaper(
   let imageKeyCursor = 0;
   let generatedCount = 0;
   for (let i = 0; i < entries.length; i++) {
-    const { question, diagramNeeded, diagramDescription } = entries[i];
-    if (!diagramNeeded) continue;
+    const { question, wantsDiagram } = entries[i];
+    if (!wantsDiagram) continue;
 
     if (imageKeyCursor < availablePageImageKeys.length) {
       question.pageImageKey = availablePageImageKeys[imageKeyCursor++];
       question.imageSource = "ingested";
-    } else if (
-      diagramDescription &&
-      config.questionPaperImageGenEnabled &&
-      isDiagramAllowlisted(diagramDescription) &&
-      generatedCount < MAX_GENERATED_DIAGRAMS
-    ) {
+    } else if (generatedCount < MAX_GENERATED_DIAGRAMS && isDiagramAllowlisted(question.text)) {
       // Counted per attempted model call (success or not) - this is the cost cap.
       generatedCount++;
       const generated = await generateDiagramImage(
         env,
         paperId,
         `${question.section}-${i + 1}`,
-        diagramDescription,
+        question.text,
         config.questionPaperImageGenEnabled
       );
       if (generated) {
@@ -322,8 +335,7 @@ export async function generatePaper(
         question.imageSource = "generated";
       }
     }
-    // else: no image - omitting the image fields IS the text-placeholder
-    // behavior; the question text stands alone.
+    if (!question.pageImageKey && !question.generatedImageKey) question.text += placeholderNote;
   }
 
   return paper;

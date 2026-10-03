@@ -107,7 +107,42 @@ describe("generatePaper", () => {
     expect(result.sections.flatMap((s) => s.questions)).toHaveLength(totalQuestionCount());
   });
 
-  it("resolves wantsDiagram slots to ingested pageImageKey when the chunk has one, without calling image-gen", async () => {
+  const diagramSlots = [
+    { section: "B", questionType: "short_answer" as const, marks: 3, count: 1, wantsDiagram: true },
+    { section: "A", questionType: "mcq" as const, marks: 1, count: 1 },
+  ];
+
+  it("appends a text placeholder and attaches no image when diagram images are disabled (the default)", async () => {
+    const chaptersNoImages = [
+      {
+        chunks: {
+          filename: "ch.pdf",
+          chunkCount: 1,
+          chunks: [{ chunkId: 0, page: 1, text: "Figure text", pageImageKey: "page-images/ch.pdf/1.png" }],
+        },
+        slots: diagramSlots,
+      },
+    ];
+    const questions = diagramSlots.flatMap((slot, i) =>
+      Array.from({ length: slot.count }, () => ({ text: `Q${i}` }))
+    );
+    vi.spyOn(llm, "generateChatCompletion").mockResolvedValue({ text: JSON.stringify({ questions }), provider: "openrouter", model: "x" });
+    const imageGenSpy = vi.spyOn(imageGen, "generateDiagramImage");
+
+    const result = await generatePaper({} as Env, blueprint, chaptersNoImages, "p1", {
+      llmProvider: "openrouter",
+      questionPaperModelSlug: "m",
+      questionPaperImageGenEnabled: false,
+    });
+
+    const diagramQuestion = result.sections.flatMap((s) => s.questions).find((q) => q.section === "B")!;
+    expect(diagramQuestion.text).toContain("Refer to the diagram/figure in your textbook");
+    expect(diagramQuestion.pageImageKey).toBeUndefined();
+    expect(diagramQuestion.generatedImageKey).toBeUndefined();
+    expect(imageGenSpy).not.toHaveBeenCalled();
+  });
+
+  it("resolves wantsDiagram slots to ingested pageImageKey when enabled and the chunk has one, without calling image-gen", async () => {
     const chaptersWithImage = [
       {
         chunks: {
@@ -115,18 +150,11 @@ describe("generatePaper", () => {
           chunkCount: 1,
           chunks: [{ chunkId: 0, page: 1, text: "Figure text", pageImageKey: "page-images/ch.pdf/1.png" }],
         },
-        slots: blueprint.slots,
+        slots: diagramSlots,
       },
     ];
-    const diagramSlotIndex = blueprint.slots.findIndex((s) => s.wantsDiagram);
-    const questions = blueprint.slots.flatMap((slot, slotIdx) =>
-      Array.from({ length: slot.count }, (_, i) => ({
-        section: slot.section,
-        questionType: slot.questionType,
-        marks: slot.marks,
-        text: `Q${slotIdx}-${i}`,
-        diagramNeeded: slotIdx === diagramSlotIndex,
-      }))
+    const questions = diagramSlots.flatMap((slot, i) =>
+      Array.from({ length: slot.count }, () => ({ text: `Q${i}` }))
     );
     vi.spyOn(llm, "generateChatCompletion").mockResolvedValue({
       text: JSON.stringify({ questions }),
@@ -144,10 +172,15 @@ describe("generatePaper", () => {
 
     const flagged = result.sections.flatMap((s) => s.questions).find((q) => q.imageSource === "ingested");
     expect(flagged?.pageImageKey).toBe("page-images/ch.pdf/1.png");
+    expect(flagged?.text).not.toContain("Refer to the diagram");
     expect(imageGenSpy).not.toHaveBeenCalled();
   });
 
   it("de-duplicates page images from overlapping chunks so consecutive diagram questions get distinct images", async () => {
+    const twoDiagramSlots = [
+      { section: "B", questionType: "short_answer" as const, marks: 3, count: 2, wantsDiagram: true },
+      { section: "A", questionType: "mcq" as const, marks: 1, count: 1 },
+    ];
     const chapters = [
       {
         chunks: {
@@ -160,19 +193,16 @@ describe("generatePaper", () => {
             { chunkId: 3, page: 2, text: "d", pageImageKey: "page-images/ch.pdf/2.png" },
           ],
         },
-        slots: blueprint.slots,
+        slots: twoDiagramSlots,
       },
     ];
-    let n = 0;
-    const questions = blueprint.slots.flatMap((slot) =>
-      Array.from({ length: slot.count }, () => ({ text: `Q${n}`, diagramNeeded: n++ < 2 }))
-    );
+    const questions = twoDiagramSlots.flatMap((slot, i) => Array.from({ length: slot.count }, () => ({ text: `Q${i}` })));
     vi.spyOn(llm, "generateChatCompletion").mockResolvedValue({ text: JSON.stringify({ questions }), provider: "openrouter", model: "x" });
 
     const result = await generatePaper({} as Env, blueprint, chapters, "p1", {
       llmProvider: "openrouter",
       questionPaperModelSlug: "m",
-      questionPaperImageGenEnabled: false,
+      questionPaperImageGenEnabled: true,
     });
 
     const keys = result.sections.flatMap((s) => s.questions).filter((q) => q.pageImageKey).map((q) => q.pageImageKey);
@@ -180,17 +210,15 @@ describe("generatePaper", () => {
   });
 
   it("caps image-gen fallback calls at MAX_GENERATED_DIAGRAMS per paper", async () => {
-    const questions = Array.from({ length: totalQuestionCount() }, (_, i) => ({
-      text: `Q${i}`,
-      diagramNeeded: true,
-      diagramDescription: "a simple series circuit diagram",
-    }));
+    const manyDiagramSlots = [{ section: "B", questionType: "short_answer" as const, marks: 3, count: 5, wantsDiagram: true }];
+    const questions = Array.from({ length: 5 }, (_, i) => ({ text: `a simple circuit diagram Q${i}` }));
     vi.spyOn(llm, "generateChatCompletion").mockResolvedValue({ text: JSON.stringify({ questions }), provider: "openrouter", model: "x" });
     const imageGenSpy = vi
       .spyOn(imageGen, "generateDiagramImage")
       .mockImplementation(async (_env, paperId, slotKey) => ({ generatedImageKey: `question-papers/${paperId}/gen-${slotKey}.png` }));
 
-    const result = await generatePaper({} as Env, blueprint, chaptersWithSlots, "p1", {
+    const chaptersNoImages = [{ chunks: { ...chaptersWithSlots[0].chunks }, slots: manyDiagramSlots }];
+    const result = await generatePaper({} as Env, blueprint, chaptersNoImages, "p1", {
       llmProvider: "openrouter",
       questionPaperModelSlug: "m",
       questionPaperImageGenEnabled: true,
