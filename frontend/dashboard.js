@@ -61,12 +61,18 @@ function uploadCardHtml() {
       <div class="upload-row">
         <input type="password" id="ingest-key-input" placeholder="x-ingest-key (if configured)" autocomplete="off" value="${escapeHtml(savedKey)}" />
       </div>
-      <label for="upload-subject">Subject</label>
-      <input type="text" id="upload-subject" name="subject" placeholder="e.g. Science" required />
-      <label for="upload-class">Class</label>
-      <input type="text" id="upload-class" name="class" placeholder="e.g. 10" required />
-      <label for="upload-chapter">Chapter</label>
-      <input type="text" id="upload-chapter" name="chapter" placeholder="e.g. Carbon and its Compounds" required />
+      <div class="upload-row">
+        <label for="upload-subject">Subject</label>
+        <input type="text" id="upload-subject" name="subject" placeholder="e.g. Science" required />
+      </div>
+      <div class="upload-row">
+        <label for="upload-class">Class</label>
+        <input type="text" id="upload-class" name="class" placeholder="e.g. 10" required />
+      </div>
+      <div class="upload-row">
+        <label for="upload-chapter">Chapter</label>
+        <input type="text" id="upload-chapter" name="chapter" placeholder="e.g. Carbon and its Compounds" required />
+      </div>
       <div class="upload-row">
         <input type="file" id="file-input" accept="application/pdf" />
         <button id="upload-btn">Upload</button>
