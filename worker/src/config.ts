@@ -19,6 +19,8 @@ export interface RuntimeConfig {
   ingestionModelSlug: string;
   explainRetrievalMode: ExplainRetrievalMode;
   conceptExplainerEnabled: boolean;
+  questionPaperModelSlug: string;
+  questionPaperImageGenEnabled: boolean;
 }
 
 // Must match the pre-existing hardcoded behavior exactly, so shipping this
@@ -45,6 +47,8 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   ingestionModelSlug: "google/gemini-2.5-flash",
   explainRetrievalMode: "rag_plus_llm",
   conceptExplainerEnabled: true,
+  questionPaperModelSlug: DEFAULT_OPENROUTER_MODEL,
+  questionPaperImageGenEnabled: true,
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
@@ -76,6 +80,10 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
     conceptExplainerEnabled: map.has("conceptExplainerEnabled")
       ? map.get("conceptExplainerEnabled") === "true"
       : DEFAULT_CONFIG.conceptExplainerEnabled,
+    questionPaperModelSlug: map.get("questionPaperModelSlug") ?? DEFAULT_CONFIG.questionPaperModelSlug,
+    questionPaperImageGenEnabled: map.has("questionPaperImageGenEnabled")
+      ? map.get("questionPaperImageGenEnabled") === "true"
+      : DEFAULT_CONFIG.questionPaperImageGenEnabled,
   };
 }
 
@@ -93,6 +101,8 @@ const KNOWN_FIELDS = new Set([
   "ingestionModelSlug",
   "explainRetrievalMode",
   "conceptExplainerEnabled",
+  "questionPaperModelSlug",
+  "questionPaperImageGenEnabled",
 ]);
 
 // Cloudflare Vectorize rejects a query above its own topK ceiling, and a
@@ -159,6 +169,15 @@ export function validateConfigUpdate(input: Record<string, unknown>): { field: s
     if (typeof v !== "string" || v.trim().length === 0) {
       errors.push({ field: "ingestionModelSlug", message: "ingestionModelSlug must be a non-empty string" });
     }
+  }
+  if ("questionPaperModelSlug" in input) {
+    const v = input.questionPaperModelSlug;
+    if (typeof v !== "string" || v.trim().length === 0) {
+      errors.push({ field: "questionPaperModelSlug", message: "questionPaperModelSlug must be a non-empty string" });
+    }
+  }
+  if ("questionPaperImageGenEnabled" in input && typeof input.questionPaperImageGenEnabled !== "boolean") {
+    errors.push({ field: "questionPaperImageGenEnabled", message: "questionPaperImageGenEnabled must be a boolean" });
   }
   if ("explainRetrievalMode" in input) {
     if (input.explainRetrievalMode !== "rag_fallback" && input.explainRetrievalMode !== "rag_plus_llm") {

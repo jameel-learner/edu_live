@@ -22,6 +22,8 @@ describe("parseConfigRows", () => {
       { key: "ingestionModelSlug", value: "some/vision-model" },
       { key: "explainRetrievalMode", value: "rag_fallback" },
       { key: "conceptExplainerEnabled", value: "false" },
+      { key: "questionPaperModelSlug", value: "some/qp-model" },
+      { key: "questionPaperImageGenEnabled", value: "false" },
     ]);
 
     expect(result).toEqual({
@@ -38,6 +40,8 @@ describe("parseConfigRows", () => {
       ingestionModelSlug: "some/vision-model",
       explainRetrievalMode: "rag_fallback",
       conceptExplainerEnabled: false,
+      questionPaperModelSlug: "some/qp-model",
+      questionPaperImageGenEnabled: false,
     });
   });
 
@@ -183,5 +187,19 @@ describe("explainRetrievalMode and conceptExplainerEnabled", () => {
   it("accepts a valid explainRetrievalMode and conceptExplainerEnabled update", () => {
     const errors = validateConfigUpdate({ explainRetrievalMode: "rag_plus_llm", conceptExplainerEnabled: true });
     expect(errors.length).toBe(0);
+  });
+});
+
+describe("questionPaperModelSlug and questionPaperImageGenEnabled", () => {
+  it("defaults questionPaperModelSlug and questionPaperImageGenEnabled when absent", () => {
+    const result = parseConfigRows([]);
+    expect(result.questionPaperModelSlug).toBe(DEFAULT_CONFIG.questionPaperModelSlug);
+    expect(result.questionPaperImageGenEnabled).toBe(true);
+  });
+
+  it("rejects an empty questionPaperModelSlug and a non-boolean questionPaperImageGenEnabled", () => {
+    expect(validateConfigUpdate({ questionPaperModelSlug: "" })).toHaveLength(1);
+    expect(validateConfigUpdate({ questionPaperImageGenEnabled: "yes" })).toHaveLength(1);
+    expect(validateConfigUpdate({ questionPaperModelSlug: "some/model", questionPaperImageGenEnabled: false })).toHaveLength(0);
   });
 });
