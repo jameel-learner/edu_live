@@ -1,5 +1,5 @@
 import type { Env } from "./index";
-import type { GeneratedPaper } from "./questionPaperGeneration";
+import { GenerationError, parseLlmJson, type GeneratedPaper } from "./questionPaperGeneration";
 import { generateChatCompletion } from "./llm";
 
 export interface AnswerKeyEntry {
@@ -40,5 +40,32 @@ export async function generateAnswerKey(
     { llmProvider: config.llmProvider, llmModelSlug: config.questionPaperModelSlug }
   );
 
-  return JSON.parse(result.text) as AnswerKey;
+  return validateAnswerKey(parseLlmJson(result.text));
+}
+
+/**
+ * The caller caches whatever this returns permanently, so anything that
+ * isn't a well-formed {entries: [...]} must throw here rather than be cached
+ * (a cached {answers: [...]} would break that paper's answer key forever).
+ */
+export function validateAnswerKey(parsed: unknown): AnswerKey {
+  const entries = (parsed as { entries?: unknown } | null)?.entries;
+  if (!Array.isArray(entries)) {
+    throw new GenerationError("Answer key response is missing an 'entries' array");
+  }
+  entries.forEach((e, i) => {
+    const entry = e as Partial<AnswerKeyEntry> | null;
+    if (
+      !entry ||
+      typeof entry.section !== "string" ||
+      typeof entry.questionIndex !== "number" ||
+      !Number.isInteger(entry.questionIndex) ||
+      typeof entry.answer !== "string"
+    ) {
+      throw new GenerationError(`Answer key entry ${i} is malformed (expected section, questionIndex, answer)`);
+    }
+  });
+  return {
+    entries: (entries as AnswerKeyEntry[]).map((e) => ({ section: e.section, questionIndex: e.questionIndex, answer: e.answer })),
+  };
 }

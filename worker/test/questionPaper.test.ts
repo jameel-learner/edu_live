@@ -10,6 +10,7 @@ import * as cache from "../src/questionPaperCache";
 import * as retrieval from "../src/questionPaperRetrieval";
 import * as generation from "../src/questionPaperGeneration";
 import * as config from "../src/config";
+import * as llm from "../src/llm";
 
 function baseEnv(): Env {
   return {
@@ -173,6 +174,36 @@ describe("handleQuestionPaperAnswerKey / handleQuestionPaperPdf", () => {
     const request = new Request("http://worker/question-paper/unknown/answer-key", { method: "POST" });
     const response = await handleQuestionPaperAnswerKey(request, env, "unknown");
     expect(response.status).toBe(404);
+  });
+
+  it("does not cache a malformed answer key - returns an error and never calls saveAnswerKey", async () => {
+    vi.spyOn(cache, "findPaperById").mockResolvedValue({
+      id: "p1",
+      cacheKey: "k1",
+      subject: "Science",
+      class: "10",
+      marksTotal: 40,
+      chapterFilenames: ["a.pdf"],
+      blueprintVersion: "science-40-v1",
+      paperJson: { subject: "Science", class: "10", marksTotal: 40, blueprintVersion: "v", sections: [{ section: "A", questions: [{ section: "A", questionType: "mcq", marks: 1, text: "Q" }] }] },
+      answerKeyJson: null,
+      pdfR2Key: null,
+      answerKeyPdfR2Key: null,
+      createdAt: "2026-10-03T00:00:00.000Z",
+    });
+    vi.spyOn(config, "getRuntimeConfig").mockResolvedValue({ llmProvider: "openrouter", questionPaperModelSlug: "x" } as any);
+    vi.spyOn(llm, "generateChatCompletion").mockResolvedValue({ text: '{"answers": []}', provider: "openrouter", model: "x" });
+    const saveSpy = vi.spyOn(cache, "saveAnswerKey").mockResolvedValue(undefined);
+
+    const response = await handleQuestionPaperAnswerKey(
+      new Request("http://worker/question-paper/p1/answer-key", { method: "POST" }),
+      baseEnv(),
+      "p1"
+    );
+
+    expect(response.status).toBe(500);
+    expect(saveSpy).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it("pdf returns 404 for an unknown paper id", async () => {
