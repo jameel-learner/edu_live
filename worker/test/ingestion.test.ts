@@ -113,6 +113,42 @@ describe("handleIngest metadata", () => {
     expect(options.customMetadata).toHaveProperty("indexedAt");
     expect(options.customMetadata.pageCount).toBe("2");
   });
+
+  it("stores subject/class/chapter as customMetadata when provided in the form", async () => {
+    const putCalls: unknown[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      VECTORIZE: { upsert: async () => ({}) } as unknown as VectorizeIndex,
+      PDF_BUCKET: {
+        head: async () => null,
+        put: async (...args: unknown[]) => {
+          putCalls.push(args);
+        },
+      } as unknown as R2Bucket,
+    });
+
+    const formData = new FormData();
+    formData.append("file", new File(["not a real pdf"], "notes.pdf", { type: "application/pdf" }));
+    formData.append("subject", "Science");
+    formData.append("class", "10");
+    formData.append("chapter", "Carbon and its Compounds");
+    const request = new Request("https://worker.example/ingest", { method: "POST", body: formData });
+
+    const response = await handleIngest(request, env);
+    expect(response.status).toBe(200);
+
+    const sourcePut = putCalls.find((args) => (args as [string])[0] === "notes.pdf") as [
+      string,
+      ArrayBuffer,
+      { customMetadata: Record<string, string> }
+    ];
+    expect(sourcePut[2].customMetadata).toMatchObject({
+      subject: "Science",
+      class: "10",
+      chapter: "Carbon and its Compounds",
+    });
+  });
 });
 
 describe("handleIngest force re-ingest", () => {

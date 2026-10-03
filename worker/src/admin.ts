@@ -30,6 +30,9 @@ export async function handleAdminDocuments(env: Env): Promise<Response> {
       chunkCount: obj.customMetadata?.chunkCount ? Number(obj.customMetadata.chunkCount) : null,
       pageCount: obj.customMetadata?.pageCount ? Number(obj.customMetadata.pageCount) : null,
       enriched: obj.customMetadata?.enriched === undefined ? null : obj.customMetadata.enriched === "true",
+      subject: obj.customMetadata?.subject ?? null,
+      class: obj.customMetadata?.class ?? null,
+      chapter: obj.customMetadata?.chapter ?? null,
     }));
 
     const eligible = documents.filter((d) => d.indexedAt && d.chunkCount);

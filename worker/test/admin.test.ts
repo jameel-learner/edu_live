@@ -124,6 +124,39 @@ describe("handleAdminDocuments", () => {
     expect(body.documents[0].enriched).toBe(true);
   });
 
+  it("includes subject/class/chapter in the documents list when present", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [
+            {
+              key: "test.pdf",
+              size: 100,
+              customMetadata: {
+                indexedAt: "2026-10-03T00:00:00.000Z",
+                chunkCount: "3",
+                subject: "Science",
+                class: "10",
+                chapter: "Carbon and its Compounds",
+              },
+            },
+          ],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as {
+      documents: { subject: string | null; class: string | null; chapter: string | null }[];
+    };
+
+    expect(body.documents[0]).toMatchObject({
+      subject: "Science",
+      class: "10",
+      chapter: "Carbon and its Compounds",
+    });
+  });
+
   it("renders enriched as null for pre-migration PDFs with no enriched customMetadata", async () => {
     const env = makeEnv({
       PDF_BUCKET: {

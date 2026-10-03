@@ -30,6 +30,9 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
   }
 
   const force = formData.get("force") === "true";
+  const subject = String(formData.get("subject") ?? "");
+  const cls = String(formData.get("class") ?? "");
+  const chapter = String(formData.get("chapter") ?? "");
   const existing = await env.PDF_BUCKET.head(file.name);
   if (existing && !force) {
     return Response.json({ status: "skipped", reason: "already indexed", source: file.name });
@@ -156,6 +159,9 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
         pageCount: String(pages.length),
         indexedAt: new Date().toISOString(),
         enriched: String(enrichmentApplied),
+        subject,
+        class: cls,
+        chapter,
       },
     });
 
