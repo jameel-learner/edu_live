@@ -77,6 +77,73 @@ describe("saveNewPaper / findPaperById / saveAnswerKey / savePdfKey", () => {
     expect(typeof row.createdAt).toBe("string");
   });
 
+  it("uses INSERT ... ON CONFLICT(cache_key) DO NOTHING", async () => {
+    const env = makeEnv({ run: { meta: { changes: 1 } } });
+    await saveNewPaper(env, {
+      id: "p1",
+      cacheKey: "k1",
+      subject: "Science",
+      class: "10",
+      marksTotal: 40,
+      chapterFilenames: ["a.pdf"],
+      blueprintVersion: "science-40-v1",
+      paperJson: { sections: [] },
+      answerKeyJson: null,
+      pdfR2Key: null,
+      answerKeyPdfR2Key: null,
+    });
+    const sql = (env.EDU_LIVE_DB.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(sql).toMatch(/ON CONFLICT\(cache_key\) DO NOTHING/);
+  });
+
+  it("two concurrent saves with the same cache_key don't throw - the loser gets the winner's row back", async () => {
+    // Simulates D1: first INSERT inserts (changes=1), second hits the
+    // conflict and is skipped (changes=0); the follow-up SELECT by
+    // cache_key returns the winner's row.
+    const winnerDbRow = {
+      id: "winner",
+      cache_key: "k1",
+      subject: "Science",
+      class: "10",
+      marks_total: 40,
+      chapter_filenames: '["a.pdf"]',
+      blueprint_version: "science-40-v1",
+      paper_json: '{"sections":[{"section":"A","questions":[]}]}',
+      answer_key_json: null,
+      pdf_r2_key: null,
+      answer_key_pdf_r2_key: null,
+      created_at: "2026-10-03T00:00:00.000Z",
+    };
+    const db = {
+      prepare: vi.fn().mockReturnThis(),
+      bind: vi.fn().mockReturnThis(),
+      run: vi.fn().mockResolvedValueOnce({ meta: { changes: 1 } }).mockResolvedValueOnce({ meta: { changes: 0 } }),
+      first: vi.fn().mockResolvedValue(winnerDbRow),
+    };
+    const env = { EDU_LIVE_DB: db } as unknown as Env;
+    const base = {
+      cacheKey: "k1",
+      subject: "Science",
+      class: "10",
+      marksTotal: 40,
+      chapterFilenames: ["a.pdf"],
+      blueprintVersion: "science-40-v1",
+      paperJson: { sections: [] },
+      answerKeyJson: null,
+      pdfR2Key: null,
+      answerKeyPdfR2Key: null,
+    };
+
+    const [first, second] = await Promise.all([
+      saveNewPaper(env, { ...base, id: "winner" }),
+      saveNewPaper(env, { ...base, id: "loser" }),
+    ]);
+
+    expect(first.id).toBe("winner");
+    expect(second.id).toBe("winner");
+    expect(second.paperJson).toEqual({ sections: [{ section: "A", questions: [] }] });
+  });
+
   it("findPaperById returns null for an unknown id", async () => {
     const env = makeEnv({ first: null });
     expect(await findPaperById(env, "unknown-id")).toBeNull();

@@ -93,6 +93,77 @@ describe("handleQuestionPaperGenerate", () => {
     expect(body.id).toBe("p1");
     expect(generateSpy).not.toHaveBeenCalled();
   });
+
+  it.each([10000000, 501, 0, -40, 40.5, "40"])(
+    "rejects out-of-bound or non-integer marksTotal=%s with 400 before any lookup or LLM call",
+    async (marksTotal) => {
+      const findSpy = vi.spyOn(cache, "findCachedPaper").mockResolvedValue(null);
+      const generateSpy = vi.spyOn(generation, "generatePaper");
+      const request = new Request("http://worker/question-paper/generate", {
+        method: "POST",
+        body: JSON.stringify({ subject: "Science", class: "10", chapterFilenames: ["a.pdf"], marksTotal }),
+      });
+      const response = await handleQuestionPaperGenerate(request, baseEnv());
+      expect(response.status).toBe(400);
+      expect(((await response.json()) as any).error).toMatch(/marksTotal/);
+      expect(findSpy).not.toHaveBeenCalled();
+      expect(generateSpy).not.toHaveBeenCalled();
+    }
+  );
+
+  it("trims class so '10' and '10 ' share one cache key and the persisted class is trimmed", async () => {
+    const findSpy = vi.spyOn(cache, "findCachedPaper").mockResolvedValue(null);
+    vi.spyOn(retrieval, "fetchAllChapterChunks").mockResolvedValue({ found: [], missing: ["a.pdf"] });
+    const send = (cls: string) =>
+      handleQuestionPaperGenerate(
+        new Request("http://worker/question-paper/generate", {
+          method: "POST",
+          body: JSON.stringify({ subject: "Science", class: cls, chapterFilenames: ["a.pdf"], marksTotal: 40 }),
+        }),
+        baseEnv()
+      );
+    await send("10");
+    await send(" 10 ");
+    expect(findSpy.mock.calls[0][1]).toBe(findSpy.mock.calls[1][1]);
+  });
+
+  it("returns the concurrent winner's paper and id when saveNewPaper reports a cache_key conflict", async () => {
+    vi.spyOn(config, "getRuntimeConfig").mockResolvedValue({ llmProvider: "openrouter", questionPaperModelSlug: "x", questionPaperImageGenEnabled: false } as any);
+    vi.spyOn(cache, "findCachedPaper").mockResolvedValue(null);
+    vi.spyOn(retrieval, "fetchAllChapterChunks").mockResolvedValue({
+      found: [{ filename: "a.pdf", chunkCount: 1, chunks: [{ chunkId: 0, page: 1, text: "t", pageImageKey: null }] }],
+      missing: [],
+    });
+    vi.spyOn(generation, "generatePaper").mockResolvedValue({
+      subject: "Science",
+      class: "",
+      marksTotal: 40,
+      blueprintVersion: "science-40-v1",
+      sections: [{ section: "A", questions: [] }],
+    });
+    const winnerPaper = { subject: "Science", class: "10", marksTotal: 40, blueprintVersion: "science-40-v1", sections: [] };
+    const saveSpy = vi.spyOn(cache, "saveNewPaper").mockImplementation(async (_env, row) => ({
+      ...row,
+      id: "winner-id",
+      paperJson: winnerPaper,
+      createdAt: "2026-10-03T00:00:00.000Z",
+    }));
+
+    const response = await handleQuestionPaperGenerate(
+      new Request("http://worker/question-paper/generate", {
+        method: "POST",
+        body: JSON.stringify({ subject: "Science", class: "10 ", chapterFilenames: ["a.pdf"], marksTotal: 40 }),
+      }),
+      baseEnv()
+    );
+    const body = (await response.json()) as any;
+
+    expect(response.status).toBe(200);
+    expect(body.id).toBe("winner-id");
+    expect(body.paper).toEqual(winnerPaper);
+    expect(body.cached).toBe(true);
+    expect(saveSpy.mock.calls[0][1].class).toBe("10");
+  });
 });
 
 describe("handleQuestionPaperAnswerKey / handleQuestionPaperPdf", () => {

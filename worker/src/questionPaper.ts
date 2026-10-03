@@ -31,6 +31,9 @@ export async function handleQuestionPaperCatalog(env: Env): Promise<Response> {
   }
 }
 
+const MIN_MARKS_TOTAL = 1;
+const MAX_MARKS_TOTAL = 500;
+
 interface GenerateRequestBody {
   subject: string;
   class: string;
@@ -41,16 +44,41 @@ interface GenerateRequestBody {
 export async function handleQuestionPaperGenerate(request: Request, env: Env): Promise<Response> {
   try {
     const body = (await request.json().catch(() => null)) as GenerateRequestBody | null;
-    if (!body || !body.subject || !body.class || !Array.isArray(body.chapterFilenames) || body.chapterFilenames.length === 0 || !body.marksTotal) {
+    if (
+      !body ||
+      typeof body.subject !== "string" ||
+      !body.subject ||
+      typeof body.class !== "string" ||
+      !body.class.trim() ||
+      !Array.isArray(body.chapterFilenames) ||
+      body.chapterFilenames.length === 0 ||
+      body.marksTotal === undefined ||
+      body.marksTotal === null
+    ) {
       return Response.json({ error: "Expected subject, class, chapterFilenames[], and marksTotal" }, { status: 400 });
     }
+    // Public route: bound marksTotal before it reaches getBlueprint's scaling
+    // so absurd/negative/fractional values can't buy a doomed-but-paid LLM call.
+    if (
+      typeof body.marksTotal !== "number" ||
+      !Number.isInteger(body.marksTotal) ||
+      body.marksTotal < MIN_MARKS_TOTAL ||
+      body.marksTotal > MAX_MARKS_TOTAL
+    ) {
+      return Response.json(
+        { error: `marksTotal must be a whole number between ${MIN_MARKS_TOTAL} and ${MAX_MARKS_TOTAL}` },
+        { status: 400 }
+      );
+    }
+    // "10" and "10 " must not become two separate cache entries.
+    const cls = body.class.trim();
 
     const blueprint = getBlueprint(body.subject, body.marksTotal);
     if (!blueprint) {
       return Response.json({ error: `No question paper template is available yet for ${body.subject}` }, { status: 400 });
     }
 
-    const cacheKey = computeCacheKey(body.subject, body.class, body.marksTotal, body.chapterFilenames, blueprint.version);
+    const cacheKey = computeCacheKey(body.subject, cls, body.marksTotal, body.chapterFilenames, blueprint.version);
     const cached = await findCachedPaper(env, cacheKey);
     if (cached) {
       return Response.json({ id: cached.id, paper: cached.paperJson, cached: true });
@@ -72,13 +100,13 @@ export async function handleQuestionPaperGenerate(request: Request, env: Env): P
       questionPaperModelSlug: config.questionPaperModelSlug,
       questionPaperImageGenEnabled: config.questionPaperImageGenEnabled,
     });
-    generated.class = body.class;
+    generated.class = cls;
 
     const row = await saveNewPaper(env, {
       id,
       cacheKey,
       subject: body.subject,
-      class: body.class,
+      class: cls,
       marksTotal: body.marksTotal,
       chapterFilenames: body.chapterFilenames,
       blueprintVersion: blueprint.version,
@@ -88,6 +116,12 @@ export async function handleQuestionPaperGenerate(request: Request, env: Env): P
       answerKeyPdfR2Key: null,
     });
 
+    // If a concurrent request for the same cache_key won the insert,
+    // saveNewPaper returns that row - return its paper so both callers see
+    // the same, persisted paper (and the same id for answer-key/PDF calls).
+    if (row.id !== id) {
+      return Response.json({ id: row.id, paper: row.paperJson, cached: true });
+    }
     return Response.json({ id: row.id, paper: generated, cached: false });
   } catch (err) {
     return errorResponse("/question-paper/generate", err);
