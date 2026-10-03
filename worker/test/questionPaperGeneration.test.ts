@@ -208,8 +208,8 @@ describe("generatePaper", () => {
 
     expect(spy.mock.calls[0][1]).toBe(computeGenerationMaxTokens(count80));
     expect(computeGenerationMaxTokens(count80)).toBeGreaterThan(computeGenerationMaxTokens(totalQuestionCount()));
-    expect(computeGenerationMaxTokens(1)).toBeGreaterThanOrEqual(2000);
-    expect(computeGenerationMaxTokens(100000)).toBeLessThanOrEqual(16000);
+    expect(computeGenerationMaxTokens(1)).toBeGreaterThanOrEqual(4000);
+    expect(computeGenerationMaxTokens(100000)).toBeLessThanOrEqual(24000);
   });
 });
 

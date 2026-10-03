@@ -36,9 +36,16 @@ export const MAX_GENERATED_DIAGRAMS = 3;
 
 // max_tokens scales with paper size so an 80-mark paper (~2x the questions
 // of a 40-mark one) isn't truncated mid-JSON, while staying bounded.
-const TOKENS_PER_QUESTION = 200;
-const MIN_GENERATION_TOKENS = 2000;
-const MAX_GENERATION_TOKENS = 16000;
+// 200 tokens/question was too tight in production (a 19-question 40-mark
+// paper only got 3800 tokens) - the default model is a reasoning model
+// (qwen3-235b-a22b), and its reasoning tokens count against max_tokens
+// before it ever gets to the JSON answer, so real headroom needs to be
+// well above "the JSON alone would need this many tokens." Raised with
+// margin; the default model is OpenRouter's free tier, so a higher cap
+// doesn't cost more unless a paid model is configured.
+const TOKENS_PER_QUESTION = 450;
+const MIN_GENERATION_TOKENS = 4000;
+const MAX_GENERATION_TOKENS = 24000;
 
 export function computeGenerationMaxTokens(totalQuestions: number): number {
   return Math.min(MAX_GENERATION_TOKENS, Math.max(MIN_GENERATION_TOKENS, totalQuestions * TOKENS_PER_QUESTION));
