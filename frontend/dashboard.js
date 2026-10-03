@@ -61,6 +61,12 @@ function uploadCardHtml() {
       <div class="upload-row">
         <input type="password" id="ingest-key-input" placeholder="x-ingest-key (if configured)" autocomplete="off" value="${escapeHtml(savedKey)}" />
       </div>
+      <label for="upload-subject">Subject</label>
+      <input type="text" id="upload-subject" name="subject" placeholder="e.g. Science" required />
+      <label for="upload-class">Class</label>
+      <input type="text" id="upload-class" name="class" placeholder="e.g. 10" required />
+      <label for="upload-chapter">Chapter</label>
+      <input type="text" id="upload-chapter" name="chapter" placeholder="e.g. Carbon and its Compounds" required />
       <div class="upload-row">
         <input type="file" id="file-input" accept="application/pdf" />
         <button id="upload-btn">Upload</button>
@@ -75,6 +81,9 @@ function uploadCardHtml() {
 
 function wireUploadCard(onUploaded) {
   const ingestKeyInput = document.getElementById("ingest-key-input");
+  const subjectInput = document.getElementById("upload-subject");
+  const classInput = document.getElementById("upload-class");
+  const chapterInput = document.getElementById("upload-chapter");
   const fileInput = document.getElementById("file-input");
   const forceReingestInput = document.getElementById("force-reingest-input");
   const uploadBtn = document.getElementById("upload-btn");
@@ -97,6 +106,9 @@ function wireUploadCard(onUploaded) {
     const formData = new FormData();
     formData.append("file", file);
     if (forceReingestInput.checked) formData.append("force", "true");
+    formData.append("subject", subjectInput.value.trim());
+    formData.append("class", classInput.value.trim());
+    formData.append("chapter", chapterInput.value.trim());
     const ingestKey = ingestKeyInput.value.trim();
 
     try {
