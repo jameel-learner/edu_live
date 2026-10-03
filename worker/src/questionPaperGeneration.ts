@@ -176,13 +176,26 @@ function parseEntries(raw: string, orderedSlots: BlueprintSlot[]): ParsedEntry[]
   // One entry per question, in slot order - the paper's structure comes from
   // here, never from what the LLM echoes back.
   const perQuestionSlots = orderedSlots.flatMap((s) => Array.from({ length: s.count }, () => s));
-  if (parsed.questions.length !== perQuestionSlots.length) {
+  let rawQuestions = parsed.questions as RawQuestion[];
+  if (rawQuestions.length < perQuestionSlots.length) {
+    // Can't safely invent missing questions - this must surface as a visible
+    // failure rather than silently shipping a short paper.
     throw new GenerationError(
-      `Expected ${perQuestionSlots.length} questions matching the blueprint, got ${parsed.questions.length}`
+      `Expected ${perQuestionSlots.length} questions matching the blueprint, got ${rawQuestions.length}`
     );
   }
+  if (rawQuestions.length > perQuestionSlots.length) {
+    // Free-tier models occasionally over-generate by a question or two.
+    // Since structure is assigned positionally from the blueprint (not from
+    // what the LLM echoes), dropping the trailing excess is safe and keeps
+    // this a zero-extra-cost recovery instead of failing the whole request.
+    console.warn(
+      `question paper generation: LLM returned ${rawQuestions.length} questions, expected ${perQuestionSlots.length} - truncating extras`
+    );
+    rawQuestions = rawQuestions.slice(0, perQuestionSlots.length);
+  }
 
-  return (parsed.questions as RawQuestion[]).map((q, i) => {
+  return rawQuestions.map((q, i) => {
     const slot = perQuestionSlots[i];
     const question: GeneratedQuestion = {
       section: slot.section,

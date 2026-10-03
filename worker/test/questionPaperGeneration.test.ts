@@ -56,9 +56,22 @@ describe("parseAndValidateGeneratedPaper", () => {
     expect(() => parseAndValidateGeneratedPaper("not json", blueprint)).toThrow(GenerationError);
   });
 
-  it("throws GenerationError when the question count doesn't match the blueprint", () => {
+  it("throws GenerationError when the LLM returns fewer questions than the blueprint", () => {
     const raw = JSON.stringify({ questions: [{ section: "A", questionType: "mcq", marks: 1, text: "only one" }] });
     expect(() => parseAndValidateGeneratedPaper(raw, blueprint)).toThrow(GenerationError);
+  });
+
+  it("truncates extra trailing questions instead of throwing when the LLM over-generates", () => {
+    const expected = totalQuestionCount();
+    const questions = Array.from({ length: expected + 1 }, (_, i) => ({
+      section: "A",
+      questionType: "mcq",
+      marks: 1,
+      text: `Question ${i}`,
+    }));
+    const raw = JSON.stringify({ questions });
+    const result = parseAndValidateGeneratedPaper(raw, blueprint);
+    expect(result.sections.flatMap((s) => s.questions)).toHaveLength(expected);
   });
 });
 
