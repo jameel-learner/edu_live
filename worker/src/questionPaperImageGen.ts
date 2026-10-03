@@ -32,8 +32,12 @@ export async function generateDiagramImage(
 
   try {
     const result = await env.AI.run(IMAGE_GEN_MODEL, { prompt: `Simple textbook-style diagram: ${description}` });
+    // The model returns a ReadableStream of PNG bytes; R2 can reject a
+    // stream with no known length, so buffer it to bytes first.
+    const bytes = await new Response(result as unknown as BodyInit).arrayBuffer();
+    if (bytes.byteLength === 0) throw new Error("image-gen returned an empty image");
     const key = `question-papers/${paperId}/gen-${slotKey}.png`;
-    await env.PDF_BUCKET.put(key, result, { httpMetadata: { contentType: "image/png" } });
+    await env.PDF_BUCKET.put(key, bytes, { httpMetadata: { contentType: "image/png" } });
     return { generatedImageKey: key };
   } catch (err) {
     console.error("question paper image-gen failed, falling back to text placeholder", err);

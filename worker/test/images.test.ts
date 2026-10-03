@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleGetImage } from "../src/images";
+import { handleGetImage, isServableImageKey } from "../src/images";
 import type { Env } from "../src/index";
 
 function makeEnv(overrides: Partial<Env> = {}): Env {
@@ -49,6 +49,46 @@ describe("handleGetImage", () => {
 
     const response = await handleGetImage("notes.pdf", env);
 
+    expect(response.status).toBe(404);
+    expect(getCalled).toBe(false);
+  });
+
+  it("serves generated question-paper diagrams (question-papers/<id>/gen-<slot>.png)", async () => {
+    const pngBytes = new Uint8Array([137, 80, 78, 71]).buffer;
+    const env = makeEnv({
+      PDF_BUCKET: {
+        get: async (key: string) => {
+          expect(key).toBe("question-papers/p1/gen-B-9.png");
+          return { arrayBuffer: async () => pngBytes } as unknown as R2ObjectBody;
+        },
+      } as unknown as R2Bucket,
+    });
+    const response = await handleGetImage("question-papers/p1/gen-B-9.png", env);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("isServableImageKey allows page images and generated diagrams but never question-paper PDFs", () => {
+    expect(isServableImageKey("page-images/notes.pdf/3.png")).toBe(true);
+    expect(isServableImageKey("question-papers/p1/gen-A-1.png")).toBe(true);
+    expect(isServableImageKey("question-papers/p1.pdf")).toBe(false);
+    expect(isServableImageKey("question-papers/p1-key.pdf")).toBe(false);
+    expect(isServableImageKey("question-papers/p1.png")).toBe(false);
+    expect(isServableImageKey("question-papers/p1/gen-../../x.png")).toBe(false);
+    expect(isServableImageKey("notes.pdf")).toBe(false);
+  });
+
+  it("returns 404 without touching R2 for a question-papers/ PDF key", async () => {
+    let getCalled = false;
+    const env = makeEnv({
+      PDF_BUCKET: {
+        get: async () => {
+          getCalled = true;
+          return null;
+        },
+      } as unknown as R2Bucket,
+    });
+    const response = await handleGetImage("question-papers/p1.pdf", env);
     expect(response.status).toBe(404);
     expect(getCalled).toBe(false);
   });
