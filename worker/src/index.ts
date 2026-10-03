@@ -12,6 +12,13 @@ import {
   handleAdminPutConfig,
   handleAdminGetCleanedDocument,
 } from "./admin";
+import {
+  handleQuestionPaperCatalog,
+  handleQuestionPaperGenerate,
+  handleQuestionPaperAnswerKey,
+  handleQuestionPaperPdf,
+  handleQuestionPaperAnswerKeyPdf,
+} from "./questionPaper";
 
 export interface Env {
   AI: Ai;
@@ -50,6 +57,24 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/explain") {
       return withCors(await handleExplain(request, env, ctx));
+    }
+    if (request.method === "GET" && url.pathname === "/question-paper/catalog") {
+      return withCors(await handleQuestionPaperCatalog(env));
+    }
+    if (request.method === "POST" && url.pathname === "/question-paper/generate") {
+      return withCors(await handleQuestionPaperGenerate(request, env));
+    }
+    if (request.method === "POST" && url.pathname.match(/^\/question-paper\/[^/]+\/answer-key$/)) {
+      const paperId = url.pathname.split("/")[2];
+      return withCors(await handleQuestionPaperAnswerKey(request, env, paperId));
+    }
+    if (request.method === "GET" && url.pathname.match(/^\/question-paper\/[^/]+\/pdf$/)) {
+      const paperId = url.pathname.split("/")[2];
+      return withCors(await handleQuestionPaperPdf(env, paperId));
+    }
+    if (request.method === "GET" && url.pathname.match(/^\/question-paper\/[^/]+\/answer-key-pdf$/)) {
+      const paperId = url.pathname.split("/")[2];
+      return withCors(await handleQuestionPaperAnswerKeyPdf(env, paperId));
     }
     if (request.method === "GET" && url.pathname.startsWith("/images/")) {
       const key = decodeURIComponent(url.pathname.slice("/images/".length));
