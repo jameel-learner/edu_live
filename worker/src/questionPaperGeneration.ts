@@ -2,7 +2,7 @@ import type { Env } from "./index";
 import type { Blueprint, BlueprintSlot } from "./questionPaperBlueprints";
 import type { ChapterChunks } from "./questionPaperRetrieval";
 import { generateChatCompletion } from "./llm";
-import { generateDiagramImage } from "./questionPaperImageGen";
+import { generateDiagramImage, isDiagramAllowlisted } from "./questionPaperImageGen";
 
 export interface GeneratedQuestion {
   section: string;
@@ -27,10 +27,53 @@ export interface GeneratedPaper {
 export class GenerationError extends Error {}
 
 const MAX_CHUNK_CHARS_PER_CHAPTER = 6000; // bounds prompt size regardless of chapter length
+// Smallest useful excerpt per sampled chunk - below this, an excerpt is too
+// short to set a question from, so fewer (evenly spaced) chunks are sampled.
+const MIN_EXCERPT_CHARS = 400;
 
-function sampleChunkText(chunks: ChapterChunks): string {
-  const joined = chunks.chunks.map((c) => c.text).join("\n");
-  return joined.length > MAX_CHUNK_CHARS_PER_CHAPTER ? joined.slice(0, MAX_CHUNK_CHARS_PER_CHAPTER) : joined;
+// Spec cost bound: image-gen fallback is "0-3 extra calls per paper".
+export const MAX_GENERATED_DIAGRAMS = 3;
+
+// max_tokens scales with paper size so an 80-mark paper (~2x the questions
+// of a 40-mark one) isn't truncated mid-JSON, while staying bounded.
+const TOKENS_PER_QUESTION = 200;
+const MIN_GENERATION_TOKENS = 2000;
+const MAX_GENERATION_TOKENS = 16000;
+
+export function computeGenerationMaxTokens(totalQuestions: number): number {
+  return Math.min(MAX_GENERATION_TOKENS, Math.max(MIN_GENERATION_TOKENS, totalQuestions * TOKENS_PER_QUESTION));
+}
+
+/**
+ * Samples chunk text evenly across the WHOLE chapter within a fixed
+ * character budget, rather than truncating from the start (which would
+ * only ever show the LLM the chapter's opening pages).
+ */
+export function sampleChunkText(chunks: ChapterChunks, budget = MAX_CHUNK_CHARS_PER_CHAPTER): string {
+  const texts = chunks.chunks.map((c) => c.text);
+  const joined = texts.join("\n");
+  if (joined.length <= budget || texts.length === 0) return joined.slice(0, budget);
+
+  const n = texts.length;
+  const k = Math.min(n, Math.max(1, Math.floor(budget / MIN_EXCERPT_CHARS)));
+  // Budget minus the (k - 1) newline separators, split evenly per excerpt.
+  const perExcerpt = Math.max(1, Math.floor((budget - (k - 1)) / k));
+  const excerpts: string[] = [];
+  for (let i = 0; i < k; i++) {
+    // Evenly spaced indices spanning first..last chunk inclusive.
+    const index = k === 1 ? 0 : Math.round((i * (n - 1)) / (k - 1));
+    excerpts.push(texts[index].slice(0, perExcerpt));
+  }
+  return excerpts.join("\n");
+}
+
+interface ChapterSlot {
+  slot: BlueprintSlot;
+  filename: string;
+}
+
+function chapterSlotsInOrder(chaptersWithSlots: { chunks: ChapterChunks; slots: BlueprintSlot[] }[]): ChapterSlot[] {
+  return chaptersWithSlots.flatMap(({ chunks, slots }) => slots.map((slot) => ({ slot, filename: chunks.filename })));
 }
 
 export function buildGenerationPrompt(
@@ -44,11 +87,10 @@ export function buildGenerationPrompt(
     "knowledge rather than inventing facts. Return ONLY valid JSON matching the schema described, " +
     "with no markdown fences and no commentary.";
 
-  const slotLines = chaptersWithSlots
-    .flatMap(({ slots }) => slots)
+  const slotLines = chapterSlotsInOrder(chaptersWithSlots)
     .map(
-      (s, i) =>
-        `${i + 1}. section=${s.section} type=${s.questionType} marks=${s.marks} count=${s.count}${s.wantsDiagram ? " (set diagramNeeded=true for this slot's questions)" : ""}`
+      ({ slot: s, filename }, i) =>
+        `${i + 1}. chapter=${filename} section=${s.section} type=${s.questionType} marks=${s.marks} count=${s.count}${s.wantsDiagram ? " (set diagramNeeded=true for this slot's questions)" : ""}`
     )
     .join("\n");
 
@@ -57,7 +99,8 @@ export function buildGenerationPrompt(
     .join("\n\n");
 
   const user =
-    `Blueprint slots (fill exactly this many questions per slot, in order):\n${slotLines}\n\n` +
+    `Blueprint slots (fill exactly this many questions per slot, in order; draw each slot's questions from ` +
+    `the source text of the chapter named on its line):\n${slotLines}\n\n` +
     `Source material:\n${sourceText}\n\n` +
     `Return JSON: {"questions": [{"section": string, "questionType": string, "marks": number, "text": string, ` +
     `"latex"?: string, "table"?: {"headers": string[], "rows": string[][]}, "diagramNeeded"?: boolean, ` +
@@ -68,64 +111,122 @@ export function buildGenerationPrompt(
 }
 
 interface RawQuestion {
-  section: string;
-  questionType: string;
-  marks: number;
-  text: string;
-  latex?: string;
-  table?: { headers: string[]; rows: string[][] };
-  diagramNeeded?: boolean;
+  section?: unknown;
+  questionType?: unknown;
+  marks?: unknown;
+  text?: unknown;
+  latex?: unknown;
+  table?: unknown;
+  diagramNeeded?: unknown;
+  diagramDescription?: unknown;
+}
+
+/**
+ * Repair strategy for free-tier models that wrap JSON in markdown fences or
+ * add prose around it: try the raw text, then with a ``` / ```json fence
+ * stripped, then the substring from the first "{" to the last "}". Throws
+ * GenerationError only if every attempt fails.
+ */
+export function parseLlmJson(raw: string): unknown {
+  const attempts: string[] = [];
+  const trimmed = raw.trim();
+  attempts.push(trimmed);
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) attempts.push(fenced[1]);
+  else attempts.push(trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first !== -1 && last > first) attempts.push(trimmed.slice(first, last + 1));
+
+  let lastError: unknown;
+  for (const candidate of attempts) {
+    try {
+      return JSON.parse(candidate);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new GenerationError(`LLM returned invalid JSON: ${(lastError as Error)?.message ?? "unparseable"}`);
+}
+
+function isValidTable(t: unknown): t is { headers: string[]; rows: string[][] } {
+  const table = t as { headers?: unknown; rows?: unknown } | null;
+  return (
+    !!table &&
+    Array.isArray(table.headers) &&
+    Array.isArray(table.rows) &&
+    table.rows.every((r) => Array.isArray(r))
+  );
+}
+
+interface ParsedEntry {
+  question: GeneratedQuestion;
+  diagramNeeded: boolean;
   diagramDescription?: string;
 }
 
-export function parseAndValidateGeneratedPaper(raw: string, blueprint: Blueprint): GeneratedPaper {
-  let parsed: { questions: RawQuestion[] };
-  try {
-    parsed = JSON.parse(raw);
-  } catch (err) {
-    throw new GenerationError(`LLM returned invalid JSON: ${(err as Error).message}`);
-  }
-
+function parseEntries(raw: string, orderedSlots: BlueprintSlot[]): ParsedEntry[] {
+  const parsed = parseLlmJson(raw) as { questions?: unknown } | null;
   if (!parsed || !Array.isArray(parsed.questions)) {
     throw new GenerationError("LLM response missing a 'questions' array");
   }
 
-  const expectedCount = blueprint.slots.reduce((sum, s) => sum + s.count, 0);
-  if (parsed.questions.length !== expectedCount) {
+  // One entry per question, in slot order - the paper's structure comes from
+  // here, never from what the LLM echoes back.
+  const perQuestionSlots = orderedSlots.flatMap((s) => Array.from({ length: s.count }, () => s));
+  if (parsed.questions.length !== perQuestionSlots.length) {
     throw new GenerationError(
-      `Expected ${expectedCount} questions matching the blueprint, got ${parsed.questions.length}`
+      `Expected ${perQuestionSlots.length} questions matching the blueprint, got ${parsed.questions.length}`
     );
   }
 
-  const sectionsMap = new Map<string, GeneratedQuestion[]>();
-  for (const q of parsed.questions) {
+  return (parsed.questions as RawQuestion[]).map((q, i) => {
+    const slot = perQuestionSlots[i];
     const question: GeneratedQuestion = {
-      section: q.section,
-      questionType: q.questionType,
-      marks: q.marks,
-      text: q.text,
-      ...(q.latex ? { latex: q.latex } : {}),
-      ...(q.table ? { table: q.table } : {}),
+      section: slot.section,
+      questionType: slot.questionType,
+      marks: slot.marks,
+      text: typeof q?.text === "string" ? q.text : String(q?.text ?? ""),
+      ...(typeof q?.latex === "string" && q.latex ? { latex: q.latex } : {}),
+      ...(isValidTable(q?.table) ? { table: q.table } : {}),
     };
-    if (!sectionsMap.has(q.section)) sectionsMap.set(q.section, []);
-    sectionsMap.get(q.section)!.push(question);
-  }
+    return {
+      question,
+      diagramNeeded: q?.diagramNeeded === true,
+      ...(typeof q?.diagramDescription === "string" ? { diagramDescription: q.diagramDescription } : {}),
+    };
+  });
+}
 
+function groupIntoPaper(entries: ParsedEntry[], blueprint: Blueprint): GeneratedPaper {
+  const sectionsMap = new Map<string, GeneratedQuestion[]>();
+  for (const { question } of entries) {
+    if (!sectionsMap.has(question.section)) sectionsMap.set(question.section, []);
+    sectionsMap.get(question.section)!.push(question);
+  }
   return {
     subject: blueprint.subject,
-    class: "", // filled in by the caller (generatePaper), which knows the requested class
+    class: "", // filled in by the caller, which knows the requested class
     marksTotal: blueprint.marksTotal,
     blueprintVersion: blueprint.version,
     sections: Array.from(sectionsMap.entries()).map(([section, questions]) => ({ section, questions })),
   };
 }
 
-// diagramNeeded/diagramDescription aren't part of GeneratedQuestion (they're
-// resolved away before the caller sees the final paper), so this parses the
-// raw LLM output a second time here rather than widening the public type.
-function extractDiagramHints(raw: string): { diagramNeeded?: boolean; diagramDescription?: string }[] {
-  const parsed = JSON.parse(raw) as { questions: RawQuestion[] };
-  return parsed.questions.map((q) => ({ diagramNeeded: q.diagramNeeded, diagramDescription: q.diagramDescription }));
+/**
+ * `orderedSlots` is the slot order the prompt asked for (chapter-by-chapter
+ * when multiple chapters are selected); defaults to the blueprint's own order.
+ * section/questionType/marks are always taken from the slot at the same
+ * position, so the paper structure exactly matches the blueprint.
+ */
+export function parseAndValidateGeneratedPaper(
+  raw: string,
+  blueprint: Blueprint,
+  orderedSlots: BlueprintSlot[] = blueprint.slots
+): GeneratedPaper {
+  return groupIntoPaper(parseEntries(raw, orderedSlots), blueprint);
 }
 
 export async function generatePaper(
@@ -136,58 +237,66 @@ export async function generatePaper(
   config: { llmProvider: "openrouter" | "workers-ai"; questionPaperModelSlug: string; questionPaperImageGenEnabled: boolean }
 ): Promise<GeneratedPaper> {
   const { system, user } = buildGenerationPrompt(blueprint, chaptersWithSlots);
+  const orderedSlots = chapterSlotsInOrder(chaptersWithSlots).map((cs) => cs.slot);
+  const totalQuestions = orderedSlots.reduce((sum, s) => sum + s.count, 0);
 
   const result = await generateChatCompletion(
     [
       { role: "system", content: system },
       { role: "user", content: user },
     ],
-    4000,
+    computeGenerationMaxTokens(totalQuestions),
     env,
     { llmProvider: config.llmProvider, llmModelSlug: config.questionPaperModelSlug }
   );
 
-  const paper = parseAndValidateGeneratedPaper(result.text, blueprint);
-  const diagramHints = extractDiagramHints(result.text);
+  const entries = parseEntries(result.text, orderedSlots);
+  const paper = groupIntoPaper(entries, blueprint);
 
-  // Build a lookup from chunk pageImageKey candidates per chapter, used as
-  // a fallback match for any diagram-flagged question (not a precise
-  // per-question source link, since the LLM doesn't echo which chunk it
-  // used - this is acceptable because wantsDiagram slots are intentionally
-  // sparse and chapters with a captured figure usually have very few).
-  const availablePageImageKeys = chaptersWithSlots
-    .flatMap(({ chunks }) => chunks.chunks)
-    .map((c) => c.pageImageKey)
-    .filter((k): k is string => !!k);
+  // Candidate ingested page images across the selected chapters. Not a
+  // precise per-question source link (the LLM doesn't echo which chunk it
+  // used); de-duplicated because overlapping chunks share a page, so without
+  // this consecutive diagram questions would get the same image repeatedly.
+  const availablePageImageKeys = [
+    ...new Set(
+      chaptersWithSlots
+        .flatMap(({ chunks }) => chunks.chunks)
+        .map((c) => c.pageImageKey)
+        .filter((k): k is string => !!k)
+    ),
+  ];
 
-  let flatIndex = 0;
   let imageKeyCursor = 0;
-  for (const section of paper.sections) {
-    for (const question of section.questions) {
-      const hint = diagramHints[flatIndex++];
-      if (hint?.diagramNeeded) {
-        if (imageKeyCursor < availablePageImageKeys.length) {
-          question.pageImageKey = availablePageImageKeys[imageKeyCursor++];
-          question.imageSource = "ingested";
-        } else if (hint.diagramDescription) {
-          const generated = await generateDiagramImage(
-            env,
-            paperId,
-            `${section.section}-${flatIndex}`,
-            hint.diagramDescription,
-            config.questionPaperImageGenEnabled
-          );
-          if (generated) {
-            question.generatedImageKey = generated.generatedImageKey;
-            question.imageSource = "generated";
-          }
-          // else: no image available - question.text stands alone as the
-          // text placeholder path (caller/frontend shows the plain text;
-          // no further code change needed here since omitting the image
-          // fields IS the placeholder behavior).
-        }
+  let generatedCount = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const { question, diagramNeeded, diagramDescription } = entries[i];
+    if (!diagramNeeded) continue;
+
+    if (imageKeyCursor < availablePageImageKeys.length) {
+      question.pageImageKey = availablePageImageKeys[imageKeyCursor++];
+      question.imageSource = "ingested";
+    } else if (
+      diagramDescription &&
+      config.questionPaperImageGenEnabled &&
+      isDiagramAllowlisted(diagramDescription) &&
+      generatedCount < MAX_GENERATED_DIAGRAMS
+    ) {
+      // Counted per attempted model call (success or not) - this is the cost cap.
+      generatedCount++;
+      const generated = await generateDiagramImage(
+        env,
+        paperId,
+        `${question.section}-${i + 1}`,
+        diagramDescription,
+        config.questionPaperImageGenEnabled
+      );
+      if (generated) {
+        question.generatedImageKey = generated.generatedImageKey;
+        question.imageSource = "generated";
       }
     }
+    // else: no image - omitting the image fields IS the text-placeholder
+    // behavior; the question text stands alone.
   }
 
   return paper;
