@@ -197,6 +197,19 @@ describe("questionPaperModelSlug and questionPaperImageGenEnabled", () => {
     expect(result.questionPaperImageGenEnabled).toBe(true);
   });
 
+  it("falls back to the CURRENT llmModelSlug when no questionPaperModelSlug override is stored", () => {
+    const result = parseConfigRows([{ key: "llmModelSlug", value: "some/chat-model" }]);
+    expect(result.questionPaperModelSlug).toBe("some/chat-model");
+  });
+
+  it("uses an explicitly stored questionPaperModelSlug over llmModelSlug", () => {
+    const result = parseConfigRows([
+      { key: "llmModelSlug", value: "some/chat-model" },
+      { key: "questionPaperModelSlug", value: "some/qp-model" },
+    ]);
+    expect(result.questionPaperModelSlug).toBe("some/qp-model");
+  });
+
   it("rejects an empty questionPaperModelSlug and a non-boolean questionPaperImageGenEnabled", () => {
     expect(validateConfigUpdate({ questionPaperModelSlug: "" })).toHaveLength(1);
     expect(validateConfigUpdate({ questionPaperImageGenEnabled: "yes" })).toHaveLength(1);

@@ -47,12 +47,16 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   ingestionModelSlug: "google/gemini-2.5-flash",
   explainRetrievalMode: "rag_plus_llm",
   conceptExplainerEnabled: true,
+  // Falls back to llmModelSlug at read time (parseConfigRows) when no
+  // override is stored; this static value only matters when D1 is
+  // unreachable, where it equals the llmModelSlug default anyway.
   questionPaperModelSlug: DEFAULT_OPENROUTER_MODEL,
   questionPaperImageGenEnabled: true,
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
   const map = new Map(rows.map((r) => [r.key, r.value]));
+  const llmModelSlug = map.get("llmModelSlug") ?? DEFAULT_CONFIG.llmModelSlug;
   return {
     topK: map.has("topK") ? parseInt(map.get("topK")!, 10) : DEFAULT_CONFIG.topK,
     confidenceThreshold: map.has("confidenceThreshold")
@@ -67,7 +71,7 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
       ? map.get("guardrailEnabled") === "true"
       : DEFAULT_CONFIG.guardrailEnabled,
     llmProvider: (map.get("llmProvider") as LlmProvider | undefined) ?? DEFAULT_CONFIG.llmProvider,
-    llmModelSlug: map.get("llmModelSlug") ?? DEFAULT_CONFIG.llmModelSlug,
+    llmModelSlug,
     jevRelevanceThreshold: map.has("jevRelevanceThreshold")
       ? Number(map.get("jevRelevanceThreshold"))
       : DEFAULT_CONFIG.jevRelevanceThreshold,
@@ -80,7 +84,10 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
     conceptExplainerEnabled: map.has("conceptExplainerEnabled")
       ? map.get("conceptExplainerEnabled") === "true"
       : DEFAULT_CONFIG.conceptExplainerEnabled,
-    questionPaperModelSlug: map.get("questionPaperModelSlug") ?? DEFAULT_CONFIG.questionPaperModelSlug,
+    // No stored override -> follow the CURRENT chat model, so changing
+    // llmModelSlug in Settings also moves question papers unless an admin
+    // explicitly set a question-paper-specific model.
+    questionPaperModelSlug: map.get("questionPaperModelSlug") ?? llmModelSlug,
     questionPaperImageGenEnabled: map.has("questionPaperImageGenEnabled")
       ? map.get("questionPaperImageGenEnabled") === "true"
       : DEFAULT_CONFIG.questionPaperImageGenEnabled,
