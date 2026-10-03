@@ -126,7 +126,7 @@ export async function handleQuestionPaperPdf(env: Env, paperId: string): Promise
       if (object) return new Response(object.body, { headers: { "content-type": "application/pdf" } });
     }
 
-    const html = renderPaperHtml(row.paperJson as any);
+    const html = await renderPaperHtml(row.paperJson as any, env);
     const pdf = await renderHtmlToPdf(env, html);
     if (!pdf) return Response.json({ error: "PDF generation failed, paper still available in-chat" }, { status: 500 });
 
@@ -153,7 +153,7 @@ export async function handleQuestionPaperAnswerKeyPdf(env: Env, paperId: string)
       if (object) return new Response(object.body, { headers: { "content-type": "application/pdf" } });
     }
 
-    const html = renderAnswerKeyHtml(row.paperJson as any, row.answerKeyJson as any);
+    const html = await renderAnswerKeyHtml(row.paperJson as any, row.answerKeyJson as any, env);
     const pdf = await renderHtmlToPdf(env, html);
     if (!pdf) return Response.json({ error: "PDF generation failed, answer key still available in-chat" }, { status: 500 });
 
