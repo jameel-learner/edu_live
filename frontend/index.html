@@ -35,8 +35,21 @@
       </div>
       <h2 id="chat-section-title">Ask a question</h2>
       <div id="chat-log"></div>
-      <div id="question-paper-placeholder" class="coming-soon" hidden>
-        Question Paper generation is coming soon.
+      <div id="question-paper-panel" class="question-paper-panel" hidden>
+        <div class="qp-picker">
+          <label for="qp-subject-select">Subject</label>
+          <select id="qp-subject-select"></select>
+          <label for="qp-class-select">Class</label>
+          <select id="qp-class-select"></select>
+          <fieldset id="qp-chapter-list"><legend>Chapters</legend></fieldset>
+          <label for="qp-marks-select">Total Marks</label>
+          <select id="qp-marks-select">
+            <option value="40">40</option>
+            <option value="80">80</option>
+          </select>
+          <button type="button" id="qp-generate-btn">Generate</button>
+        </div>
+        <div id="qp-result"></div>
       </div>
       <form id="chat-form">
         <select id="answer-style-select" title="Answer length">

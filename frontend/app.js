@@ -26,7 +26,116 @@ const THINKING_PHRASES = ["Thinking", "Searching your notes", "Checking sources"
 
 const modeButtons = document.querySelectorAll(".mode-btn");
 const sectionTitle = document.getElementById("chat-section-title");
-const questionPaperPlaceholder = document.getElementById("question-paper-placeholder");
+const questionPaperPanel = document.getElementById("question-paper-panel");
+const qpSubjectSelect = document.getElementById("qp-subject-select");
+const qpClassSelect = document.getElementById("qp-class-select");
+const qpChapterList = document.getElementById("qp-chapter-list");
+const qpMarksSelect = document.getElementById("qp-marks-select");
+const qpGenerateBtn = document.getElementById("qp-generate-btn");
+const qpResult = document.getElementById("qp-result");
+
+let qpCatalog = [];
+
+async function loadQuestionPaperCatalog() {
+  if (qpCatalog.length > 0) return;
+  const response = await fetch(`${WORKER_URL}/question-paper/catalog`);
+  const body = await response.json();
+  qpCatalog = body.documents || [];
+
+  const subjects = [...new Set(qpCatalog.map((d) => d.subject))];
+  qpSubjectSelect.innerHTML = subjects.map((s) => `<option value="${s}">${s}</option>`).join("");
+  renderClassOptions();
+}
+
+function renderClassOptions() {
+  const subject = qpSubjectSelect.value;
+  const classes = [...new Set(qpCatalog.filter((d) => d.subject === subject).map((d) => d.class))];
+  qpClassSelect.innerHTML = classes.map((c) => `<option value="${c}">${c}</option>`).join("");
+  renderChapterCheckboxes();
+}
+
+function renderChapterCheckboxes() {
+  const subject = qpSubjectSelect.value;
+  const cls = qpClassSelect.value;
+  const chapters = qpCatalog.filter((d) => d.subject === subject && d.class === cls);
+  qpChapterList.innerHTML =
+    "<legend>Chapters</legend>" +
+    chapters
+      .map(
+        (c) =>
+          `<label><input type="checkbox" value="${c.filename}" /> ${c.chapter}</label>`
+      )
+      .join("");
+}
+
+qpSubjectSelect.addEventListener("change", renderClassOptions);
+qpClassSelect.addEventListener("change", renderChapterCheckboxes);
+
+qpGenerateBtn.addEventListener("click", async () => {
+  const chapterFilenames = [...qpChapterList.querySelectorAll("input:checked")].map((el) => el.value);
+  if (chapterFilenames.length === 0) {
+    qpResult.textContent = "Select at least one chapter.";
+    return;
+  }
+
+  qpResult.textContent = "Generating...";
+  const response = await fetch(`${WORKER_URL}/question-paper/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      subject: qpSubjectSelect.value,
+      class: qpClassSelect.value,
+      chapterFilenames,
+      marksTotal: Number(qpMarksSelect.value),
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: "Something went wrong." }));
+    qpResult.textContent = body.error;
+    return;
+  }
+
+  const body = await response.json();
+  renderQuestionPaper(body.id, body.paper);
+});
+
+function renderQuestionPaper(paperId, paper) {
+  const sectionsHtml = paper.sections
+    .map(
+      (s) =>
+        `<h3>Section ${s.section}</h3><ol>${s.questions
+          .map((q) => {
+            const image = q.pageImageKey || q.generatedImageKey
+              ? `<img src="${WORKER_URL}/images/${encodeURIComponent(q.pageImageKey || q.generatedImageKey)}" alt="diagram" />`
+              : "";
+            return `<li>${q.text} <em>[${q.marks} mark${q.marks === 1 ? "" : "s"}]</em>${image}</li>`;
+          })
+          .join("")}</ol>`
+    )
+    .join("");
+
+  qpResult.innerHTML =
+    `<div class="qp-actions">` +
+    `<a href="${WORKER_URL}/question-paper/${paperId}/pdf" target="_blank">Download PDF</a>` +
+    `<button type="button" id="qp-answer-key-btn">Generate Answer Key</button>` +
+    `</div>${sectionsHtml}<div id="qp-answer-key-result"></div>`;
+
+  document.getElementById("qp-answer-key-btn").addEventListener("click", async () => {
+    const akResult = document.getElementById("qp-answer-key-result");
+    akResult.textContent = "Generating answer key...";
+    const response = await fetch(`${WORKER_URL}/question-paper/${paperId}/answer-key`, { method: "POST" });
+    if (!response.ok) {
+      akResult.textContent = "Could not generate the answer key.";
+      return;
+    }
+    const body = await response.json();
+    akResult.innerHTML =
+      `<h3>Answer Key</h3><ol>${body.answerKey.entries.map((e) => `<li>${e.answer}</li>`).join("")}</ol>` +
+      `<a href="${WORKER_URL}/question-paper/${paperId}/answer-key-pdf" target="_blank">Download Answer Key PDF</a>`;
+  });
+}
+
 let currentMode = "chat";
 
 const MODE_COPY = {
@@ -46,12 +155,11 @@ modeButtons.forEach((btn) => {
     questionInput.placeholder = MODE_COPY[currentMode].placeholder;
     answerStyleSelect.style.display = currentMode === "chat" ? "" : "none";
 
-    // Question Paper has no backend yet - show a placeholder card instead
-    // of the chat form/log, so there's nothing to submit until it's built.
     const isQuestionPaper = currentMode === "questionPaper";
-    questionPaperPlaceholder.hidden = !isQuestionPaper;
+    questionPaperPanel.hidden = !isQuestionPaper;
     chatLog.hidden = isQuestionPaper;
     chatForm.hidden = isQuestionPaper;
+    if (isQuestionPaper) loadQuestionPaperCatalog();
   });
 });
 
