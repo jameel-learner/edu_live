@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fetchChapterChunks, fetchAllChapterChunks } from "../src/questionPaperRetrieval";
+import { fetchChapterChunks, fetchAllChapterChunks, GET_BY_IDS_BATCH_SIZE } from "../src/questionPaperRetrieval";
 import type { Env } from "../src/index";
 import { chunkVectorId } from "../src/vectorId";
 
@@ -29,6 +29,30 @@ describe("fetchChapterChunks", () => {
     const result = await fetchChapterChunks(env, "ch.pdf");
     expect(result).not.toBeNull();
     expect(result!.chunks).toEqual([{ chunkId: 0, page: 2, text: "hello", pageImageKey: "page-images/ch.pdf/2.png" }]);
+  });
+});
+
+describe("fetchChapterChunks batching", () => {
+  it("splits getByIds into batches of at most GET_BY_IDS_BATCH_SIZE and concatenates results in chunk order", async () => {
+    const chunkCount = 45;
+    const getByIds = vi.fn(async (ids: string[]) =>
+      ids.map((id) => ({ id, metadata: { page: 1, text: `t-${id}` } }))
+    );
+    const env = {
+      PDF_BUCKET: { head: vi.fn().mockResolvedValue({ customMetadata: { chunkCount: String(chunkCount) } }) },
+      VECTORIZE: { getByIds },
+    } as unknown as Env;
+
+    const result = await fetchChapterChunks(env, "big.pdf");
+
+    expect(getByIds).toHaveBeenCalledTimes(Math.ceil(chunkCount / GET_BY_IDS_BATCH_SIZE));
+    for (const call of getByIds.mock.calls) {
+      expect(call[0].length).toBeLessThanOrEqual(GET_BY_IDS_BATCH_SIZE);
+    }
+    expect(getByIds.mock.calls.flatMap((c) => c[0])).toEqual(
+      Array.from({ length: chunkCount }, (_, i) => chunkVectorId("big.pdf", i))
+    );
+    expect(result!.chunks.map((c) => c.chunkId)).toEqual(Array.from({ length: chunkCount }, (_, i) => i));
   });
 });
 
