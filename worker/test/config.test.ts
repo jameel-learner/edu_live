@@ -194,7 +194,7 @@ describe("questionPaperModelSlug and questionPaperImageGenEnabled", () => {
   it("defaults questionPaperModelSlug and questionPaperImageGenEnabled when absent", () => {
     const result = parseConfigRows([]);
     expect(result.questionPaperModelSlug).toBe(DEFAULT_CONFIG.questionPaperModelSlug);
-    expect(result.questionPaperImageGenEnabled).toBe(true);
+    expect(result.questionPaperImageGenEnabled).toBe(false);
   });
 
   it("falls back to the CURRENT llmModelSlug when no questionPaperModelSlug override is stored", () => {

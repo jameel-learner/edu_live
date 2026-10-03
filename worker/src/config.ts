@@ -51,7 +51,12 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   // override is stored; this static value only matters when D1 is
   // unreachable, where it equals the llmModelSlug default anyway.
   questionPaperModelSlug: DEFAULT_OPENROUTER_MODEL,
-  questionPaperImageGenEnabled: true,
+  // Off by default: image-gen models produce unreliable, often nonsensical
+  // output for technical diagrams (circuits, labeled figures) - real
+  // ingested textbook page screenshots and the text placeholder fallback
+  // are the only diagram sources that consistently work. Toggle on from
+  // the admin Settings tab only if a better model becomes available.
+  questionPaperImageGenEnabled: false,
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
