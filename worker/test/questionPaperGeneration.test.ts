@@ -271,6 +271,16 @@ describe("JSON repair (parseLlmJson / parseAndValidateGeneratedPaper)", () => {
   it("still throws GenerationError when no attempt yields valid JSON", () => {
     expect(() => parseLlmJson("Sorry, I can't do that { not json }")).toThrow(GenerationError);
   });
+
+  it("repairs an invalid backslash escape (e.g. raw LaTeX \\Omega in a text field)", () => {
+    // Built by hand, not JSON.stringify, since a correct stringify would
+    // never reproduce the bug - the model emits a literal backslash
+    // followed by a letter that isn't a legal JSON escape character.
+    const raw = '{"questions": [{"text": "Find the resistance in \\Omega for Q0"}]}';
+    expect(() => JSON.parse(raw)).toThrow(); // confirms this really is invalid JSON
+    const result = parseLlmJson(raw) as { questions: { text: string }[] };
+    expect(result.questions[0].text).toContain("Omega");
+  });
 });
 
 describe("structure comes from the blueprint, not the LLM's echoed fields", () => {

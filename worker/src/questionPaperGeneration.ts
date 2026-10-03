@@ -131,11 +131,25 @@ interface RawQuestion {
   table?: unknown;
 }
 
+// JSON only permits a backslash before one of these characters. Models
+// asked for CBSE/physics content routinely write inline LaTeX-ish notation
+// (e.g. "\Omega" for the ohm symbol, "\times", "\(...\)") directly in a
+// text field without doubling the backslash, which isn't valid JSON and
+// fails with "Bad escaped character". Escaping any backslash not already
+// followed by a legal JSON escape char turns that stray "\O" into a literal
+// "\O" in the parsed string (harmless - at worst a slightly odd-looking
+// character sequence) instead of a hard parse failure.
+function sanitizeInvalidJsonEscapes(text: string): string {
+  return text.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
+}
+
 /**
- * Repair strategy for free-tier models that wrap JSON in markdown fences or
- * add prose around it: try the raw text, then with a ``` / ```json fence
- * stripped, then the substring from the first "{" to the last "}". Throws
- * GenerationError only if every attempt fails.
+ * Repair strategy for free-tier models that wrap JSON in markdown fences,
+ * add prose around it, or emit invalid backslash escapes: try the raw text,
+ * then with a ``` / ```json fence stripped, then the substring from the
+ * first "{" to the last "}" - and for each of those, also try it with
+ * invalid escapes sanitized. Throws GenerationError only if every attempt
+ * fails.
  */
 export function parseLlmJson(raw: string): unknown {
   const attempts: string[] = [];
@@ -150,8 +164,13 @@ export function parseLlmJson(raw: string): unknown {
   const last = trimmed.lastIndexOf("}");
   if (first !== -1 && last > first) attempts.push(trimmed.slice(first, last + 1));
 
+  // Try every candidate as-is first, then every candidate with invalid
+  // escapes sanitized - as-is first, since sanitizing is a no-op textual
+  // change only needed when the plain parse actually fails.
+  const allAttempts = [...attempts, ...attempts.map(sanitizeInvalidJsonEscapes)];
+
   let lastError: unknown;
-  for (const candidate of attempts) {
+  for (const candidate of allAttempts) {
     try {
       return JSON.parse(candidate);
     } catch (err) {
