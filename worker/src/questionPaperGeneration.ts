@@ -182,24 +182,27 @@ function parseEntries(raw: string, orderedSlots: BlueprintSlot[]): ParsedEntry[]
 
   // One entry per question, in slot order - the paper's structure comes from
   // here, never from what the LLM echoes back.
-  const perQuestionSlots = orderedSlots.flatMap((s) => Array.from({ length: s.count }, () => s));
+  let perQuestionSlots = orderedSlots.flatMap((s) => Array.from({ length: s.count }, () => s));
   let rawQuestions = parsed.questions as RawQuestion[];
-  if (rawQuestions.length < perQuestionSlots.length) {
-    // Can't safely invent missing questions - this must surface as a visible
-    // failure rather than silently shipping a short paper.
-    throw new GenerationError(
-      `Expected ${perQuestionSlots.length} questions matching the blueprint, got ${rawQuestions.length}`
-    );
+  if (rawQuestions.length === 0) {
+    // A genuinely empty response isn't a usable paper at any size - this is
+    // the one case that must still surface as a visible failure.
+    throw new GenerationError("LLM returned zero questions");
   }
-  if (rawQuestions.length > perQuestionSlots.length) {
-    // Free-tier models occasionally over-generate by a question or two.
-    // Since structure is assigned positionally from the blueprint (not from
-    // what the LLM echoes), dropping the trailing excess is safe and keeps
-    // this a zero-extra-cost recovery instead of failing the whole request.
+  if (rawQuestions.length !== perQuestionSlots.length) {
+    // Free-tier models don't always hit the exact requested count (either
+    // direction). Rather than fail the whole request - which the user would
+    // just retry anyway at the same cost - ship whatever usable count came
+    // back: trim the longer list down to the shorter one, so section/type/
+    // marks (still taken positionally from the blueprint) and question text
+    // always line up 1:1. A smaller-than-requested paper is acceptable; a
+    // zero/garbled one is not.
+    const usable = Math.min(rawQuestions.length, perQuestionSlots.length);
     console.warn(
-      `question paper generation: LLM returned ${rawQuestions.length} questions, expected ${perQuestionSlots.length} - truncating extras`
+      `question paper generation: LLM returned ${rawQuestions.length} questions, expected ${perQuestionSlots.length} - using ${usable}`
     );
-    rawQuestions = rawQuestions.slice(0, perQuestionSlots.length);
+    rawQuestions = rawQuestions.slice(0, usable);
+    perQuestionSlots = perQuestionSlots.slice(0, usable);
   }
 
   return rawQuestions.map((q, i) => {
@@ -226,10 +229,14 @@ function groupIntoPaper(entries: ParsedEntry[], blueprint: Blueprint): Generated
     if (!sectionsMap.has(question.section)) sectionsMap.set(question.section, []);
     sectionsMap.get(question.section)!.push(question);
   }
+  // Reflects what's actually on the paper, not the blueprint's nominal
+  // total - when the LLM under-generates, the paper is shipped smaller
+  // rather than failing outright, so the displayed total must match.
+  const marksTotal = entries.reduce((sum, { question }) => sum + question.marks, 0);
   return {
     subject: blueprint.subject,
     class: "", // filled in by the caller, which knows the requested class
-    marksTotal: blueprint.marksTotal,
+    marksTotal,
     blueprintVersion: blueprint.version,
     sections: Array.from(sectionsMap.entries()).map(([section, questions]) => ({ section, questions })),
   };

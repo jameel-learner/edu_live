@@ -56,8 +56,17 @@ describe("parseAndValidateGeneratedPaper", () => {
     expect(() => parseAndValidateGeneratedPaper("not json", blueprint)).toThrow(GenerationError);
   });
 
-  it("throws GenerationError when the LLM returns fewer questions than the blueprint", () => {
+  it("ships a smaller paper instead of throwing when the LLM under-generates", () => {
     const raw = JSON.stringify({ questions: [{ section: "A", questionType: "mcq", marks: 1, text: "only one" }] });
+    const result = parseAndValidateGeneratedPaper(raw, blueprint);
+    expect(result.sections.flatMap((s) => s.questions)).toHaveLength(1);
+    // marksTotal reflects what's actually on the paper (the first blueprint
+    // slot's marks), not the blueprint's nominal total.
+    expect(result.marksTotal).toBe(blueprint.slots[0].marks);
+  });
+
+  it("throws GenerationError when the LLM returns zero questions", () => {
+    const raw = JSON.stringify({ questions: [] });
     expect(() => parseAndValidateGeneratedPaper(raw, blueprint)).toThrow(GenerationError);
   });
 
