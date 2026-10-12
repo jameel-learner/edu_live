@@ -1,6 +1,8 @@
 import puppeteer, { type Browser } from "@cloudflare/puppeteer";
 import type { Env } from "./index";
 
+const MIN_PLAUSIBLE_SCREENSHOT_BYTES = 4000;
+
 function base64FromArrayBuffer(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let binary = "";
@@ -51,17 +53,40 @@ export async function capturePageScreenshot(
     // large share of the captured frame alongside the actual page content -
     // confirmed in production: a captured screenshot showed the full browser
     // PDF-viewer app, not a clean page image. A larger viewport leaves more
-    // room for the actual content relative to that chrome.
-    await page.setViewport({ width: 1600, height: 1600 });
-    // toolbar=0/navpanes=0/statusbar=0 are Chromium PDF viewer URL
-    // parameters that hide its toolbar and thumbnail sidebar - without them
-    // the screenshot captures the browser's PDF-reader app, not the page.
-    const dataUrl = `data:application/pdf;base64,${base64FromArrayBuffer(pdfBytes)}#page=${pageNumber}&toolbar=0&navpanes=0&statusbar=0`;
+    // room for the actual content relative to that chrome. Portrait (not
+    // square) to roughly match a real page's own aspect ratio - a square
+    // viewport at "page-fit" zoom still letterboxes with wasted margin on a
+    // portrait page.
+    await page.setViewport({ width: 1240, height: 1754 });
+    // toolbar=0/navpanes=0/statusbar=0 hide Chromium's PDF viewer chrome -
+    // without them the screenshot captures the browser's PDF-reader app, not
+    // the page. zoom=page-fit is the critical one for legibility: without it,
+    // the viewer's continuous-scroll view fills the tall viewport with page
+    // content AND spills into the start of the next page below, so the
+    // actual target page (and any diagram on it) only occupies a small
+    // fraction of the captured frame - confirmed in production: a captured
+    // diagram was technically present but unreadably small once scaled down
+    // in the chat UI. page-fit scales the single target page to fill the
+    // viewport instead, maximizing the diagram's actual pixel size.
+    const dataUrl = `data:application/pdf;base64,${base64FromArrayBuffer(pdfBytes)}#page=${pageNumber}&zoom=page-fit&toolbar=0&navpanes=0&statusbar=0`;
     // networkidle0 (rather than the default "load") waits for the PDF
     // viewer's own rendering to settle before screenshotting - screenshotting
     // immediately on "load" can capture a blank or toolbar-only frame.
     await page.goto(dataUrl, { waitUntil: "networkidle0" });
-    const screenshot = await page.screenshot();
+    const screenshot = (await page.screenshot()) as Uint8Array;
+    // A screenshot that's almost entirely one flat color - the known
+    // Browser Rendering timing issue where a frame gets captured before the
+    // PDF viewer finishes painting, leaving a blank or solid-black image -
+    // compresses to a PNG far smaller than any page with real content.
+    // Treat it as a failed capture rather than ship a known-blank image:
+    // consistent with this function's existing fail-open contract (no image
+    // is better than a broken one).
+    if (screenshot.byteLength < MIN_PLAUSIBLE_SCREENSHOT_BYTES) {
+      console.error(
+        `page screenshot for page ${pageNumber} looks blank (${screenshot.byteLength} bytes) - discarding`
+      );
+      return null;
+    }
     return screenshot as unknown as ArrayBuffer;
   } catch (err) {
     console.error(`page screenshot failed for page ${pageNumber}`, err);

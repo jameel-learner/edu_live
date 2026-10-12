@@ -61,17 +61,20 @@ function uploadCardHtml() {
       <div class="upload-row">
         <input type="password" id="ingest-key-input" placeholder="x-ingest-key (if configured)" autocomplete="off" value="${escapeHtml(savedKey)}" />
       </div>
-      <div class="upload-row">
-        <label for="upload-subject">Subject</label>
-        <input type="text" id="upload-subject" name="subject" placeholder="e.g. Science" required />
+      <label class="checkbox-row upload-force-row">
+        <input type="checkbox" id="qp-eligible-input" checked />
+        Include in Question Paper generation
+      </label>
+      <div class="upload-row" id="upload-subject-row">
+        <label>Subject</label>
+        <div class="subject-toggle" id="upload-subject-toggle">
+          <button type="button" class="subject-toggle-btn active" data-subject="Science">Science</button>
+          <button type="button" class="subject-toggle-btn" data-subject="Maths">Maths</button>
+        </div>
       </div>
-      <div class="upload-row">
-        <label for="upload-class">Class</label>
-        <input type="text" id="upload-class" name="class" placeholder="e.g. 10" required />
-      </div>
-      <div class="upload-row">
+      <div class="upload-row" id="upload-chapter-row">
         <label for="upload-chapter">Chapter</label>
-        <input type="text" id="upload-chapter" name="chapter" placeholder="e.g. Carbon and its Compounds" required />
+        <input type="text" id="upload-chapter" name="chapter" placeholder="e.g. Carbon and its Compounds" />
       </div>
       <div class="upload-row">
         <input type="file" id="file-input" accept="application/pdf" />
@@ -87,13 +90,32 @@ function uploadCardHtml() {
 
 function wireUploadCard(onUploaded) {
   const ingestKeyInput = document.getElementById("ingest-key-input");
-  const subjectInput = document.getElementById("upload-subject");
-  const classInput = document.getElementById("upload-class");
+  const qpEligibleInput = document.getElementById("qp-eligible-input");
+  const subjectRow = document.getElementById("upload-subject-row");
+  const subjectToggle = document.getElementById("upload-subject-toggle");
+  const chapterRow = document.getElementById("upload-chapter-row");
   const chapterInput = document.getElementById("upload-chapter");
   const fileInput = document.getElementById("file-input");
   const forceReingestInput = document.getElementById("force-reingest-input");
   const uploadBtn = document.getElementById("upload-btn");
   const uploadStatus = document.getElementById("upload-status");
+
+  let selectedSubject = "Science";
+
+  function syncQpFieldsVisibility() {
+    const eligible = qpEligibleInput.checked;
+    subjectRow.hidden = !eligible;
+    chapterRow.hidden = !eligible;
+  }
+  qpEligibleInput.addEventListener("change", syncQpFieldsVisibility);
+  syncQpFieldsVisibility();
+
+  subjectToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest(".subject-toggle-btn");
+    if (!btn) return;
+    selectedSubject = btn.dataset.subject;
+    subjectToggle.querySelectorAll(".subject-toggle-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  });
 
   ingestKeyInput.addEventListener("input", () => {
     localStorage.setItem(INGEST_KEY_STORAGE, ingestKeyInput.value);
@@ -112,9 +134,13 @@ function wireUploadCard(onUploaded) {
     const formData = new FormData();
     formData.append("file", file);
     if (forceReingestInput.checked) formData.append("force", "true");
-    formData.append("subject", subjectInput.value.trim());
-    formData.append("class", classInput.value.trim());
-    formData.append("chapter", chapterInput.value.trim());
+    // Leaving subject unset is what makes a document invisible to Question
+    // Paper generation (worker/src/questionPaper.ts filters on it) - so a
+    // chat/explainer-only upload must send nothing here, not empty strings.
+    if (qpEligibleInput.checked) {
+      formData.append("subject", selectedSubject);
+      formData.append("chapter", chapterInput.value.trim());
+    }
     const ingestKey = ingestKeyInput.value.trim();
 
     try {
@@ -354,8 +380,8 @@ async function loadCostingTab(range = "1d") {
         ${lastTransaction ? `<p class="txn-meta">Most recent LLM: <strong>${escapeHtml(lastTransaction.model)}</strong>${lastTransaction.jev_model ? ` · JEV: <strong>${escapeHtml(lastTransaction.jev_model)}</strong>` : ""}</p>` : ""}
         <div class="metric-row">
           <div class="metric"><div class="label">Queries</div><div class="value">${summary?.queryCount ?? 0}</div></div>
-          <div class="metric"><div class="label">Input tokens (est.)</div><div class="value">${summary?.inputTokens ?? 0}</div></div>
-          <div class="metric"><div class="label">Output tokens (est.)</div><div class="value">${summary?.outputTokens ?? 0}</div></div>
+          <div class="metric"><div class="label">Input tokens</div><div class="value">${summary?.inputTokens ?? 0}</div></div>
+          <div class="metric"><div class="label">Output tokens</div><div class="value">${summary?.outputTokens ?? 0}</div></div>
           <div class="metric"><div class="label">LLM cost</div><div class="value">$${(summary?.llmCostUsd ?? 0).toFixed(5)}</div></div>
           <div class="metric"><div class="label">JEV cost</div><div class="value">$${(summary?.jevCostUsd ?? 0).toFixed(5)}</div></div>
         </div>

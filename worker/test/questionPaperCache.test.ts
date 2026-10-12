@@ -15,14 +15,14 @@ function makeEnv(overrides: Partial<{ first: unknown; all: { results: unknown[] 
 
 describe("computeCacheKey", () => {
   it("is deterministic regardless of chapter filename order", () => {
-    const a = computeCacheKey("Science", "10", 40, ["b.pdf", "a.pdf"], "science-40-v1");
-    const b = computeCacheKey("Science", "10", 40, ["a.pdf", "b.pdf"], "science-40-v1");
+    const a = computeCacheKey("Science", 40, ["b.pdf", "a.pdf"], "science-40-v1");
+    const b = computeCacheKey("Science", 40, ["a.pdf", "b.pdf"], "science-40-v1");
     expect(a).toBe(b);
   });
 
   it("differs when marksTotal differs", () => {
-    const a = computeCacheKey("Science", "10", 40, ["a.pdf"], "science-40-v1");
-    const b = computeCacheKey("Science", "10", 80, ["a.pdf"], "science-40-v1");
+    const a = computeCacheKey("Science", 40, ["a.pdf"], "science-40-v1");
+    const b = computeCacheKey("Science", 80, ["a.pdf"], "science-40-v1");
     expect(a).not.toBe(b);
   });
 });
@@ -39,7 +39,6 @@ describe("findCachedPaper", () => {
         id: "p1",
         cache_key: "k1",
         subject: "Science",
-        class: "10",
         marks_total: 40,
         chapter_filenames: '["a.pdf"]',
         blueprint_version: "science-40-v1",
@@ -64,7 +63,6 @@ describe("saveNewPaper / findPaperById / saveAnswerKey / savePdfKey", () => {
       id: "p1",
       cacheKey: "k1",
       subject: "Science",
-      class: "10",
       marksTotal: 40,
       chapterFilenames: ["a.pdf"],
       blueprintVersion: "science-40-v1",
@@ -83,7 +81,6 @@ describe("saveNewPaper / findPaperById / saveAnswerKey / savePdfKey", () => {
       id: "p1",
       cacheKey: "k1",
       subject: "Science",
-      class: "10",
       marksTotal: 40,
       chapterFilenames: ["a.pdf"],
       blueprintVersion: "science-40-v1",
@@ -104,7 +101,6 @@ describe("saveNewPaper / findPaperById / saveAnswerKey / savePdfKey", () => {
       id: "winner",
       cache_key: "k1",
       subject: "Science",
-      class: "10",
       marks_total: 40,
       chapter_filenames: '["a.pdf"]',
       blueprint_version: "science-40-v1",
@@ -124,7 +120,6 @@ describe("saveNewPaper / findPaperById / saveAnswerKey / savePdfKey", () => {
     const base = {
       cacheKey: "k1",
       subject: "Science",
-      class: "10",
       marksTotal: 40,
       chapterFilenames: ["a.pdf"],
       blueprintVersion: "science-40-v1",

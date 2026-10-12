@@ -51,6 +51,12 @@ export function buildTransactionTrace(params: {
   jevEnabled: boolean;
   jevModel: string | null;
   jevCostUsd: number;
+  // Real provider-reported token counts and cost, when available (e.g. from
+  // OpenRouter's usage field). Falls back to character-based estimation
+  // (and $0 cost) when the provider doesn't report usage.
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  llmCostUsd?: number;
 }): TransactionTrace {
   const retrieval: RetrievalTraceEntry[] = params.jevAnnotated.map((chunk, i) => ({
     rank: i + 1,
@@ -83,9 +89,9 @@ export function buildTransactionTrace(params: {
       ? params.jevAnnotated.map((c) => ({ source: c.source, chunkId: c.chunkId, relevance: c.jevRelevance, blocked: c.jevBlocked }))
       : null,
     jevModel: params.jevModel,
-    inputTokens: estimateTokens(params.llmInput),
-    outputTokens: estimateTokens(params.llmOutput),
+    inputTokens: params.inputTokens ?? estimateTokens(params.llmInput),
+    outputTokens: params.outputTokens ?? estimateTokens(params.llmOutput),
     jevCostUsd: params.jevCostUsd,
-    llmCostUsd: 0,
+    llmCostUsd: params.llmCostUsd ?? 0,
   };
 }

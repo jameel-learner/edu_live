@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Edukripa</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css" />
   <script>
     (function () {
@@ -16,22 +16,20 @@
   </script>
 </head>
 <body>
-  <header class="app-header">
-    <div class="app-header-inner">
-      <div>
-        <h1>Edukripa</h1>
-        <p class="app-subtitle">Ask questions about your uploaded notes.</p>
-      </div>
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">Theme</button>
-    </div>
-  </header>
-
   <main class="app-main">
     <section class="card" id="chat-section">
+      <div class="widget-topbar">
+        <span class="widget-orb" aria-hidden="true"></span>
+        <div class="widget-titles">
+          <h2>Edukripa</h2>
+          <p>Ask questions about your notes</p>
+        </div>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme"></button>
+      </div>
       <div class="mode-toggle" role="tablist">
         <button type="button" class="mode-btn active" data-mode="chat" role="tab" aria-selected="true">Chat</button>
-        <button type="button" class="mode-btn" data-mode="explain" role="tab" aria-selected="false">Concept Explainer</button>
-        <button type="button" class="mode-btn" data-mode="questionPaper" role="tab" aria-selected="false">Question Paper</button>
+        <button type="button" class="mode-btn" data-mode="explain" role="tab" aria-selected="false">Explainer</button>
+        <button type="button" class="mode-btn" data-mode="questionPaper" role="tab" aria-selected="false">Q. Paper</button>
       </div>
       <h2 id="chat-section-title">Ask a question</h2>
       <div id="chat-log"></div>
@@ -39,8 +37,6 @@
         <div class="qp-picker">
           <label for="qp-subject-select">Subject</label>
           <select id="qp-subject-select"></select>
-          <label for="qp-class-select">Class</label>
-          <select id="qp-class-select"></select>
           <fieldset id="qp-chapter-list"><legend>Chapters</legend></fieldset>
           <label for="qp-marks-select">Total Marks</label>
           <select id="qp-marks-select">

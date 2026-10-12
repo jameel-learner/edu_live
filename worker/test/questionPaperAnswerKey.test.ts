@@ -8,7 +8,6 @@ afterEach(() => vi.restoreAllMocks());
 
 const paper: GeneratedPaper = {
   subject: "Science",
-  class: "10",
   marksTotal: 40,
   blueprintVersion: "science-40-v1",
   sections: [{ section: "A", questions: [{ section: "A", questionType: "mcq", marks: 1, text: "What is catenation?" }] }],
@@ -28,6 +27,26 @@ describe("generateAnswerKey", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(key.entries).toHaveLength(1);
     expect(key.entries[0].answer).toContain("Carbon");
+  });
+
+  it("passes each question's correctAnswer (captured at generation time) into the prompt when present", async () => {
+    const paperWithAnswers: GeneratedPaper = {
+      ...paper,
+      sections: [
+        {
+          section: "A",
+          questions: [{ section: "A", questionType: "mcq", marks: 1, text: "What is catenation?", correctAnswer: "(B) self-linking" }],
+        },
+      ],
+    };
+    const spy = vi
+      .spyOn(llm, "generateChatCompletion")
+      .mockResolvedValue({ text: JSON.stringify({ entries: [{ section: "A", questionIndex: 0, answer: "x" }] }), provider: "openrouter", model: "x" });
+
+    await generateAnswerKey({} as Env, paperWithAnswers, { llmProvider: "openrouter", questionPaperModelSlug: "some/model" });
+
+    const userMessage = spy.mock.calls[0][0].find((m) => m.role === "user")!.content;
+    expect(userMessage).toContain("(B) self-linking");
   });
 
   it("does not include the source chunk text in the prompt (reuses paper questions only)", async () => {

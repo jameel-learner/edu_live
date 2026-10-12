@@ -7,9 +7,18 @@ import { generateAnswerKey } from "./questionPaperAnswerKey";
 import { renderPaperHtml, renderAnswerKeyHtml, renderHtmlToPdf } from "./questionPaperPdf";
 import { computeCacheKey, findCachedPaper, saveNewPaper, findPaperById, saveAnswerKey, savePdfKey } from "./questionPaperCache";
 
+// GenerationError's own .message is a technical detail for the server log
+// (e.g. "LLM returned invalid JSON: Bad escaped character at position 412")
+// - useful for debugging, meaningless and alarming to a student. Every
+// GenerationError site means the same thing to a user: the model's response
+// for this paper couldn't be used. Log the real message, show one friendly,
+// actionable one instead of leaking it into the response.
 function errorResponse(routeName: string, err: unknown, status = 500): Response {
   console.error(`${routeName} failed`, err);
-  const message = err instanceof GenerationError ? err.message : "Something went wrong - please try again.";
+  const message =
+    err instanceof GenerationError
+      ? "We couldn't generate this question paper - the AI model's response came back incomplete or malformed. This is usually temporary: please try again, or try a smaller Total Marks value."
+      : "Something went wrong - please try again.";
   return Response.json({ error: message }, { status });
 }
 
@@ -22,7 +31,6 @@ export async function handleQuestionPaperCatalog(env: Env): Promise<Response> {
       .map((obj) => ({
         filename: obj.key,
         subject: obj.customMetadata!.subject!,
-        class: obj.customMetadata!.class ?? "",
         chapter: obj.customMetadata!.chapter ?? "",
       }));
     return Response.json({ documents });
@@ -36,7 +44,6 @@ const MAX_MARKS_TOTAL = 500;
 
 interface GenerateRequestBody {
   subject: string;
-  class: string;
   chapterFilenames: string[];
   marksTotal: number;
 }
@@ -48,14 +55,12 @@ export async function handleQuestionPaperGenerate(request: Request, env: Env): P
       !body ||
       typeof body.subject !== "string" ||
       !body.subject ||
-      typeof body.class !== "string" ||
-      !body.class.trim() ||
       !Array.isArray(body.chapterFilenames) ||
       body.chapterFilenames.length === 0 ||
       body.marksTotal === undefined ||
       body.marksTotal === null
     ) {
-      return Response.json({ error: "Expected subject, class, chapterFilenames[], and marksTotal" }, { status: 400 });
+      return Response.json({ error: "Expected subject, chapterFilenames[], and marksTotal" }, { status: 400 });
     }
     // Public route: bound marksTotal before it reaches getBlueprint's scaling
     // so absurd/negative/fractional values can't buy a doomed-but-paid LLM call.
@@ -70,15 +75,12 @@ export async function handleQuestionPaperGenerate(request: Request, env: Env): P
         { status: 400 }
       );
     }
-    // "10" and "10 " must not become two separate cache entries.
-    const cls = body.class.trim();
-
     const blueprint = getBlueprint(body.subject, body.marksTotal);
     if (!blueprint) {
       return Response.json({ error: `No question paper template is available yet for ${body.subject}` }, { status: 400 });
     }
 
-    const cacheKey = computeCacheKey(body.subject, cls, body.marksTotal, body.chapterFilenames, blueprint.version);
+    const cacheKey = computeCacheKey(body.subject, body.marksTotal, body.chapterFilenames, blueprint.version);
     const cached = await findCachedPaper(env, cacheKey);
     if (cached) {
       return Response.json({ id: cached.id, paper: cached.paperJson, cached: true });
@@ -100,13 +102,11 @@ export async function handleQuestionPaperGenerate(request: Request, env: Env): P
       questionPaperModelSlug: config.questionPaperModelSlug,
       questionPaperImageGenEnabled: config.questionPaperImageGenEnabled,
     });
-    generated.class = cls;
 
     const row = await saveNewPaper(env, {
       id,
       cacheKey,
       subject: body.subject,
-      class: cls,
       marksTotal: body.marksTotal,
       chapterFilenames: body.chapterFilenames,
       blueprintVersion: blueprint.version,

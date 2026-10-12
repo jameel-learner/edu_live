@@ -46,6 +46,26 @@ const BLUEPRINTS: Blueprint[] = [
       { section: "C", questionType: "long_answer", marks: 5, count: 2 },
     ],
   },
+  // Modeled directly on the CBSE Mathematics Standard (Code 041) Class X
+  // Sample Question Paper, 2025-26, 80 marks, 38 questions, 5 sections -
+  // matched section-by-section, not approximated. wantsDiagram marks the
+  // sections where the real paper actually carries a figure (circle/tangent
+  // proofs in Section C, triangle/solid-geometry in Section D, the
+  // coordinate-geometry case study in Section E) - Sections A and B in the
+  // source paper are text/numeric only.
+  {
+    subject: "Maths",
+    marksTotal: 80,
+    version: "maths-80-v1",
+    slots: [
+      { section: "A", questionType: "mcq", marks: 1, count: 18 },
+      { section: "A", questionType: "assertion_reason", marks: 1, count: 2 },
+      { section: "B", questionType: "short_answer", marks: 2, count: 5 },
+      { section: "C", questionType: "short_answer", marks: 3, count: 6, wantsDiagram: true },
+      { section: "D", questionType: "long_answer", marks: 5, count: 4, wantsDiagram: true },
+      { section: "E", questionType: "case_based", marks: 4, count: 3, wantsDiagram: true },
+    ],
+  },
 ];
 
 function blueprintTotal(slots: BlueprintSlot[]): number {

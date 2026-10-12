@@ -15,7 +15,7 @@ function escapeHtml(text: unknown): string {
 
 const BASE_STYLE =
   "body{font-family:Georgia,serif;padding:32px;} h1{font-size:20px;} h2{font-size:16px;margin-top:24px;} " +
-  "ol{padding-left:20px;} li{margin-bottom:12px;} " +
+  "ol{padding-left:20px;} li{margin-bottom:12px;white-space:pre-wrap;} " +
   "table{border-collapse:collapse;margin:8px 0;} th,td{border:1px solid #444;padding:4px 8px;font-size:13px;} " +
   "pre.qp-latex{font-family:'Courier New',monospace;background:#f4f4f4;padding:6px 8px;white-space:pre-wrap;margin:6px 0;} " +
   "img.qp-diagram{display:block;max-width:100%;max-height:360px;margin:8px 0;}";
@@ -94,7 +94,7 @@ export async function renderPaperHtml(paper: GeneratedPaper, env: Env): Promise<
     .join("");
 
   return `<html><head><style>${BASE_STYLE}</style></head><body>` +
-    `<h1>${escapeHtml(paper.subject)} - Class ${escapeHtml(paper.class)} (${escapeHtml(paper.marksTotal)} Marks)</h1>` +
+    `<h1>${escapeHtml(paper.subject)} (${escapeHtml(paper.marksTotal)} Marks)</h1>` +
     sections +
     `</body></html>`;
 }
@@ -115,7 +115,7 @@ export async function renderAnswerKeyHtml(paper: GeneratedPaper, key: AnswerKey,
     .join("");
 
   return `<html><head><style>${BASE_STYLE}</style></head><body>` +
-    `<h1>${escapeHtml(paper.subject)} - Class ${escapeHtml(paper.class)} Answer Key</h1>` +
+    `<h1>${escapeHtml(paper.subject)} Answer Key</h1>` +
     sections +
     `</body></html>`;
 }

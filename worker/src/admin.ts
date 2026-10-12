@@ -31,7 +31,6 @@ export async function handleAdminDocuments(env: Env): Promise<Response> {
       pageCount: obj.customMetadata?.pageCount ? Number(obj.customMetadata.pageCount) : null,
       enriched: obj.customMetadata?.enriched === undefined ? null : obj.customMetadata.enriched === "true",
       subject: obj.customMetadata?.subject ?? null,
-      class: obj.customMetadata?.class ?? null,
       chapter: obj.customMetadata?.chapter ?? null,
     }));
 

@@ -4,7 +4,6 @@ export interface QuestionPaperRow {
   id: string;
   cacheKey: string;
   subject: string;
-  class: string;
   marksTotal: number;
   chapterFilenames: string[];
   blueprintVersion: string;
@@ -28,14 +27,11 @@ function hashString(input: string): string {
 
 export function computeCacheKey(
   subject: string,
-  cls: string,
   marksTotal: number,
   chapterFilenames: string[],
   blueprintVersion: string
 ): string {
-  const canonical = [subject, cls, String(marksTotal), [...chapterFilenames].sort().join(","), blueprintVersion].join(
-    "|"
-  );
+  const canonical = [subject, String(marksTotal), [...chapterFilenames].sort().join(","), blueprintVersion].join("|");
   return hashString(canonical);
 }
 
@@ -44,7 +40,6 @@ function rowFromDb(raw: Record<string, unknown>): QuestionPaperRow {
     id: raw.id as string,
     cacheKey: raw.cache_key as string,
     subject: raw.subject as string,
-    class: raw.class as string,
     marksTotal: Number(raw.marks_total),
     chapterFilenames: JSON.parse(raw.chapter_filenames as string),
     blueprintVersion: raw.blueprint_version as string,
@@ -83,15 +78,14 @@ export async function saveNewPaper(
   const createdAt = new Date().toISOString();
   const result = await env.EDU_LIVE_DB.prepare(
     `INSERT INTO question_papers
-      (id, cache_key, subject, class, marks_total, chapter_filenames, blueprint_version, paper_json, answer_key_json, pdf_r2_key, answer_key_pdf_r2_key, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, cache_key, subject, marks_total, chapter_filenames, blueprint_version, paper_json, answer_key_json, pdf_r2_key, answer_key_pdf_r2_key, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(cache_key) DO NOTHING`
   )
     .bind(
       row.id,
       row.cacheKey,
       row.subject,
-      row.class,
       row.marksTotal,
       JSON.stringify(row.chapterFilenames),
       row.blueprintVersion,

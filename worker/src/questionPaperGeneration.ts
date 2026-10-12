@@ -14,11 +14,17 @@ export interface GeneratedQuestion {
   pageImageKey?: string;
   generatedImageKey?: string;
   imageSource?: "ingested" | "generated";
+  // Captured at generation time, while the source material is still in
+  // context - this is what the correct option/value actually is, not a
+  // guess. The later answer-key call (questionPaperAnswerKey.ts) has no
+  // access to the source chunks, so without this it has to re-derive
+  // correctness blind from the question text alone, which for an MCQ with
+  // no visible "right answer" marker is close to guessing.
+  correctAnswer?: string;
 }
 
 export interface GeneratedPaper {
   subject: string;
-  class: string;
   marksTotal: number;
   blueprintVersion: string;
   sections: { section: string; questions: GeneratedQuestion[] }[];
@@ -115,9 +121,16 @@ export function buildGenerationPrompt(
     `The "latex" field is ONLY for an actual mathematical or chemical formula/equation (e.g. "V = IR", a structural ` +
     `formula). NEVER put a plain-English description of a diagram, figure, or circuit into "latex" - if a question has ` +
     `no formula, omit "latex" entirely.\n\n` +
+    `For questionType "mcq": the "text" field MUST end with exactly four lettered options on their own lines, ` +
+    `formatted "(A) ...", "(B) ...", "(C) ...", "(D) ...". For questionType "assertion_reason": "text" must state ` +
+    `"Assertion (A): ..." then "Reason (R): ...", followed by the four standard CBSE options (A)-(D) for how the ` +
+    `assertion and reason relate. For every question of every type, also return "correctAnswer": a short string ` +
+    `giving the correct option letter (for mcq/assertion_reason, e.g. "(B)") or the correct final value/result (for ` +
+    `short_answer/long_answer/case_based) - this must be determinable from the source material or standard syllabus ` +
+    `knowledge, never omitted and never invented without basis.\n\n` +
     `Return JSON: {"questions": [{"section": string, "questionType": string, "marks": number, "text": string, ` +
-    `"latex"?: string, "table"?: {"headers": string[], "rows": string[][]}}]}. The questions array must contain ` +
-    `exactly the total count across all slots, in the same order as the slot list.`;
+    `"correctAnswer": string, "latex"?: string, "table"?: {"headers": string[], "rows": string[][]}}]}. The questions ` +
+    `array must contain exactly the total count across all slots, in the same order as the slot list.`;
 
   return { system, user };
 }
@@ -129,6 +142,7 @@ interface RawQuestion {
   text?: unknown;
   latex?: unknown;
   table?: unknown;
+  correctAnswer?: unknown;
 }
 
 // JSON only permits a backslash before one of these characters. Models
@@ -238,6 +252,7 @@ function parseEntries(raw: string, orderedSlots: BlueprintSlot[]): ParsedEntry[]
       text: typeof q?.text === "string" ? q.text : String(q?.text ?? ""),
       ...(typeof q?.latex === "string" && q.latex ? { latex: q.latex } : {}),
       ...(isValidTable(q?.table) ? { table: q.table } : {}),
+      ...(typeof q?.correctAnswer === "string" && q.correctAnswer ? { correctAnswer: q.correctAnswer } : {}),
     };
     return { question, wantsDiagram: slot.wantsDiagram === true };
   });
@@ -255,7 +270,6 @@ function groupIntoPaper(entries: ParsedEntry[], blueprint: Blueprint): Generated
   const marksTotal = entries.reduce((sum, { question }) => sum + question.marks, 0);
   return {
     subject: blueprint.subject,
-    class: "", // filled in by the caller, which knows the requested class
     marksTotal,
     blueprintVersion: blueprint.version,
     sections: Array.from(sectionsMap.entries()).map(([section, questions]) => ({ section, questions })),

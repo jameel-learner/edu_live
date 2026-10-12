@@ -1,5 +1,4 @@
 import type { Env } from "./index";
-import { DEFAULT_OPENROUTER_MODEL } from "./llm";
 
 export type WebSearchMode = "rag_only" | "rag_web_fallback";
 export type LlmProvider = "openrouter" | "workers-ai";
@@ -41,7 +40,7 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   jevEnabled: true,
   guardrailEnabled: true,
   llmProvider: "openrouter",
-  llmModelSlug: DEFAULT_OPENROUTER_MODEL,
+  llmModelSlug: "openai/gpt-4o-mini",
   jevRelevanceThreshold: 1.5,
   ingestionEnrichmentEnabled: true,
   ingestionModelSlug: "google/gemini-2.5-flash",
@@ -50,7 +49,7 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   // Falls back to llmModelSlug at read time (parseConfigRows) when no
   // override is stored; this static value only matters when D1 is
   // unreachable, where it equals the llmModelSlug default anyway.
-  questionPaperModelSlug: DEFAULT_OPENROUTER_MODEL,
+  questionPaperModelSlug: "openai/gpt-4o-mini",
   // Off by default: image-gen models produce unreliable, often nonsensical
   // output for technical diagrams (circuits, labeled figures) - real
   // ingested textbook page screenshots and the text placeholder fallback

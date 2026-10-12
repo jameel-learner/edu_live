@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Edukripa — Observability</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="dashboard.css" />
   <script>
     (function () {
@@ -16,35 +16,61 @@
   </script>
 </head>
 <body>
-  <header class="dash-header">
-    <div class="dash-header-inner">
-      <div>
-        <h1>Edukripa — RAG Observability</h1>
-        <p class="dash-subtitle">Indexed documents, per-query pipeline traces, and token/cost usage.</p>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-orb" aria-hidden="true"></span>
+        <span class="brand-name">Edukripa</span>
       </div>
-      <div class="header-controls">
+
+      <div class="side-section-label">General</div>
+      <nav class="side-nav" role="tablist">
+        <button class="tab-btn active" data-tab="documents" role="tab" aria-selected="true">
+          <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Documents
+        </button>
+        <button class="tab-btn" data-tab="transactions" role="tab" aria-selected="false">
+          <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          Transactions
+        </button>
+        <button class="tab-btn" data-tab="costing" role="tab" aria-selected="false">
+          <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 5.5c0-1.9-2.2-3-5-3s-5 1.3-5 3 2.2 3 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/></svg>
+          Costing
+        </button>
+        <button class="tab-btn" data-tab="settings" role="tab" aria-selected="false">
+          <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.45.7.76 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
         <div class="admin-key-field">
           <label for="admin-key-input">Admin key</label>
           <input type="password" id="admin-key-input" placeholder="x-admin-key" autocomplete="off" />
         </div>
-        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">Theme</button>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          Theme
+        </button>
       </div>
+    </aside>
+
+    <div class="main-area">
+      <header class="dash-topbar">
+        <div>
+          <h1>RAG Observability</h1>
+          <p class="dash-subtitle">Indexed documents, per-query pipeline traces, and token/cost usage.</p>
+        </div>
+      </header>
+
+      <main class="dash-main">
+        <section id="tab-documents" class="tab-panel active"></section>
+        <section id="tab-transactions" class="tab-panel"></section>
+        <section id="tab-costing" class="tab-panel"></section>
+        <section id="tab-settings" class="tab-panel"></section>
+      </main>
     </div>
-  </header>
-
-  <nav class="tabs" role="tablist">
-    <button class="tab-btn active" data-tab="documents" role="tab" aria-selected="true">Data Ingestion Dashboard</button>
-    <button class="tab-btn" data-tab="transactions" role="tab" aria-selected="false">TransactionTracker</button>
-    <button class="tab-btn" data-tab="costing" role="tab" aria-selected="false">Costing</button>
-    <button class="tab-btn" data-tab="settings" role="tab" aria-selected="false">Settings</button>
-  </nav>
-
-  <main class="dash-main">
-    <section id="tab-documents" class="tab-panel active"></section>
-    <section id="tab-transactions" class="tab-panel"></section>
-    <section id="tab-costing" class="tab-panel"></section>
-    <section id="tab-settings" class="tab-panel"></section>
-  </main>
+  </div>
 
   <script src="dashboard.js"></script>
 </body>

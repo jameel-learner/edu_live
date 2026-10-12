@@ -28,7 +28,6 @@ const modeButtons = document.querySelectorAll(".mode-btn");
 const sectionTitle = document.getElementById("chat-section-title");
 const questionPaperPanel = document.getElementById("question-paper-panel");
 const qpSubjectSelect = document.getElementById("qp-subject-select");
-const qpClassSelect = document.getElementById("qp-class-select");
 const qpChapterList = document.getElementById("qp-chapter-list");
 const qpMarksSelect = document.getElementById("qp-marks-select");
 const qpGenerateBtn = document.getElementById("qp-generate-btn");
@@ -47,6 +46,60 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+// --- Source-image lightbox: every rendered page screenshot / diagram
+// (chat answers, Concept Explainer, Question Paper) gets class
+// "answer-source-image" and is handled here via one delegated click
+// listener, rather than wiring a handler at each of the three render sites.
+const lightboxOverlay = document.createElement("div");
+lightboxOverlay.id = "image-lightbox";
+lightboxOverlay.hidden = true;
+lightboxOverlay.innerHTML = `
+  <div class="lightbox-backdrop"></div>
+  <div class="lightbox-content">
+    <img class="lightbox-image" alt="Enlarged source image" />
+    <div class="lightbox-actions">
+      <a class="lightbox-download" download>Download</a>
+      <button type="button" class="lightbox-close" aria-label="Close">Close</button>
+    </div>
+  </div>`;
+document.body.appendChild(lightboxOverlay);
+
+const lightboxImg = lightboxOverlay.querySelector(".lightbox-image");
+const lightboxDownload = lightboxOverlay.querySelector(".lightbox-download");
+
+function closeLightbox() {
+  lightboxOverlay.hidden = true;
+  lightboxImg.src = "";
+  if (lightboxDownload.href.startsWith("blob:")) URL.revokeObjectURL(lightboxDownload.href);
+  lightboxDownload.removeAttribute("href");
+}
+
+async function openLightbox(src) {
+  lightboxImg.src = src;
+  lightboxOverlay.hidden = false;
+  // A plain cross-origin href would just navigate instead of downloading,
+  // since the "download" attribute is only honored same-origin/blob - so
+  // fetch the image as a blob first and point the link at that instead.
+  try {
+    const blob = await (await fetch(src)).blob();
+    lightboxDownload.href = URL.createObjectURL(blob);
+    lightboxDownload.setAttribute("download", (src.split("/").pop() || "image") + ".png");
+  } catch (err) {
+    lightboxDownload.removeAttribute("href");
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const img = e.target.closest(".answer-source-image");
+  if (img) openLightbox(img.src);
+});
+lightboxOverlay.querySelector(".lightbox-backdrop").addEventListener("click", closeLightbox);
+lightboxOverlay.querySelector(".lightbox-close").addEventListener("click", closeLightbox);
+lightboxImg.addEventListener("click", closeLightbox);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !lightboxOverlay.hidden) closeLightbox();
+});
 
 async function loadQuestionPaperCatalog() {
   if (qpCatalog.length > 0 || qpCatalogLoading) return;
@@ -67,7 +120,7 @@ async function loadQuestionPaperCatalog() {
     qpSubjectSelect.innerHTML = subjects
       .map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`)
       .join("");
-    renderClassOptions();
+    renderChapterCheckboxes();
   } catch (err) {
     qpResult.textContent = `Could not load chapters - could not reach the server (${err.message}). Switch tabs to retry.`;
   } finally {
@@ -75,19 +128,9 @@ async function loadQuestionPaperCatalog() {
   }
 }
 
-function renderClassOptions() {
-  const subject = qpSubjectSelect.value;
-  const classes = [...new Set(qpCatalog.filter((d) => d.subject === subject).map((d) => d.class))];
-  qpClassSelect.innerHTML = classes
-    .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
-    .join("");
-  renderChapterCheckboxes();
-}
-
 function renderChapterCheckboxes() {
   const subject = qpSubjectSelect.value;
-  const cls = qpClassSelect.value;
-  const chapters = qpCatalog.filter((d) => d.subject === subject && d.class === cls);
+  const chapters = qpCatalog.filter((d) => d.subject === subject);
   qpChapterList.innerHTML =
     "<legend>Chapters</legend>" +
     chapters
@@ -98,8 +141,7 @@ function renderChapterCheckboxes() {
       .join("");
 }
 
-qpSubjectSelect.addEventListener("change", renderClassOptions);
-qpClassSelect.addEventListener("change", renderChapterCheckboxes);
+qpSubjectSelect.addEventListener("change", renderChapterCheckboxes);
 
 qpGenerateBtn.addEventListener("click", async () => {
   const chapterFilenames = [...qpChapterList.querySelectorAll("input:checked")].map((el) => el.value);
@@ -121,7 +163,6 @@ qpGenerateBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         subject: qpSubjectSelect.value,
-        class: qpClassSelect.value,
         chapterFilenames,
         marksTotal: Number(qpMarksSelect.value),
       }),
@@ -155,7 +196,7 @@ function renderQuestionTable(table) {
 function renderQuestionItem(q) {
   const imageKey = q.pageImageKey || q.generatedImageKey;
   const image = imageKey
-    ? `<img src="${WORKER_URL}/images/${encodeURIComponent(imageKey)}" alt="diagram" />`
+    ? `<img src="${WORKER_URL}/images/${encodeURIComponent(imageKey)}" alt="diagram" class="answer-source-image" />`
     : "";
   const latex = q.latex ? `<pre class="qp-latex">${escapeHtml(q.latex)}</pre>` : "";
   const marks = Number(q.marks);

@@ -309,6 +309,9 @@ export async function handleExplain(request: Request, env: Env, ctx: ExecutionCo
       jevEnabled,
       jevModel,
       jevCostUsd: jevResult.costUsd,
+      inputTokens: generateResult.inputTokens,
+      outputTokens: generateResult.outputTokens,
+      llmCostUsd: generateResult.costUsd,
     });
     ctx.waitUntil(recordExplainTransaction(env, trace));
 

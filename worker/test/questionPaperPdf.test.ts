@@ -6,7 +6,6 @@ import type { Env } from "../src/index";
 
 const paper: GeneratedPaper = {
   subject: "Science",
-  class: "10",
   marksTotal: 40,
   blueprintVersion: "science-40-v1",
   sections: [{ section: "A", questions: [{ section: "A", questionType: "mcq", marks: 1, text: "What is catenation?" }] }],
@@ -24,7 +23,6 @@ function envWithImages(images: Record<string, Uint8Array>): Env {
 
 const richPaper: GeneratedPaper = {
   subject: "Science",
-  class: "10",
   marksTotal: 40,
   blueprintVersion: "science-40-v1",
   sections: [

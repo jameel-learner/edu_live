@@ -114,7 +114,7 @@ describe("handleIngest metadata", () => {
     expect(options.customMetadata.pageCount).toBe("2");
   });
 
-  it("stores subject/class/chapter as customMetadata when provided in the form", async () => {
+  it("stores subject/chapter as customMetadata when provided in the form", async () => {
     const putCalls: unknown[] = [];
     const env = makeEnv({
       INGEST_API_KEY: "",
@@ -131,7 +131,6 @@ describe("handleIngest metadata", () => {
     const formData = new FormData();
     formData.append("file", new File(["not a real pdf"], "notes.pdf", { type: "application/pdf" }));
     formData.append("subject", "Science");
-    formData.append("class", "10");
     formData.append("chapter", "Carbon and its Compounds");
     const request = new Request("https://worker.example/ingest", { method: "POST", body: formData });
 
@@ -145,7 +144,6 @@ describe("handleIngest metadata", () => {
     ];
     expect(sourcePut[2].customMetadata).toMatchObject({
       subject: "Science",
-      class: "10",
       chapter: "Carbon and its Compounds",
     });
   });

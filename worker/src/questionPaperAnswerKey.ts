@@ -19,11 +19,18 @@ export async function generateAnswerKey(
 ): Promise<AnswerKey> {
   const system =
     "You are a CBSE/ICSE class 10 examiner writing a concise, mark-scheme-style answer key. " +
-    "For each question, give the key points/model answer only - not a full essay. Return ONLY valid JSON.";
+    "For each question, give the key points/model answer only - not a full essay. Where a correctAnswer is given, " +
+    "expand it into exam-answer phrasing (don't just repeat the option letter) rather than re-deriving it from " +
+    "scratch - it's already the grounded correct answer. Only work out the answer yourself for a question with no " +
+    "correctAnswer given. Return ONLY valid JSON.";
 
   const questionLines = paper.sections
-    .flatMap((s) => s.questions.map((q, i) => ({ section: s.section, questionIndex: i, text: q.text, marks: q.marks })))
-    .map((q) => `section=${q.section} index=${q.questionIndex} marks=${q.marks}: ${q.text}`)
+    .flatMap((s) => s.questions.map((q, i) => ({ section: s.section, questionIndex: i, text: q.text, marks: q.marks, correctAnswer: q.correctAnswer })))
+    .map(
+      (q) =>
+        `section=${q.section} index=${q.questionIndex} marks=${q.marks}` +
+        `${q.correctAnswer ? ` correctAnswer=${JSON.stringify(q.correctAnswer)}` : ""}: ${q.text}`
+    )
     .join("\n");
 
   const user =

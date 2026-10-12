@@ -33,7 +33,14 @@ describe("generateChatCompletion", () => {
         { llmProvider: "openrouter", llmModelSlug: "qwen/some-model" }
       );
 
-      expect(result).toEqual({ text: "openrouter answer", provider: "openrouter", model: "qwen/some-model" });
+      expect(result).toEqual({
+        text: "openrouter answer",
+        provider: "openrouter",
+        model: "qwen/some-model",
+        inputTokens: null,
+        outputTokens: null,
+        costUsd: 0,
+      });
       expect(capturedBody).toMatchObject({ model: "qwen/some-model", max_tokens: 100 });
       expect(capturedAuth).toBe("Bearer test-key");
     } finally {
@@ -86,5 +93,56 @@ describe("generateChatCompletion", () => {
 
     expect(result.text).toBe("workers-ai answer");
     expect(result.provider).toBe("workers-ai");
+  });
+
+  it("captures real usage tokens and computes cost from the model's per-million pricing", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "mini answer" } }],
+          usage: { prompt_tokens: 1000, completion_tokens: 500 },
+        }),
+        { status: 200 }
+      );
+
+    try {
+      const env = makeEnv();
+      const result = await generateChatCompletion([{ role: "user", content: "hi" }], 50, env, {
+        llmProvider: "openrouter",
+        llmModelSlug: "openai/gpt-4o-mini",
+      });
+
+      expect(result.inputTokens).toBe(1000);
+      expect(result.outputTokens).toBe(500);
+      // 1000 in-tokens @ $0.15/1M + 500 out-tokens @ $0.60/1M
+      expect(result.costUsd).toBeCloseTo(1000 / 1_000_000 * 0.15 + 500 / 1_000_000 * 0.6, 10);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("prefers OpenRouter's own usage.cost when present over the local pricing table", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "mini answer" } }],
+          usage: { prompt_tokens: 1000, completion_tokens: 500, cost: 0.00042 },
+        }),
+        { status: 200 }
+      );
+
+    try {
+      const env = makeEnv();
+      const result = await generateChatCompletion([{ role: "user", content: "hi" }], 50, env, {
+        llmProvider: "openrouter",
+        llmModelSlug: "openai/gpt-4o-mini",
+      });
+
+      expect(result.costUsd).toBe(0.00042);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

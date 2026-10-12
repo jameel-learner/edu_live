@@ -1,9 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 
+// A real page screenshot is tens of KB; capturePageScreenshot discards
+// anything implausibly small as a likely-blank capture (see pageScreenshot.ts),
+// so the mock must be large enough to read as "real content" in these tests.
+const FAKE_SCREENSHOT_BYTES = new Uint8Array(5000).fill(7);
+
 const mockPage = {
   setViewport: vi.fn(async (_opts: unknown) => {}),
   goto: vi.fn(async (_url: string, _opts?: unknown) => {}),
-  screenshot: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
+  screenshot: vi.fn(async () => FAKE_SCREENSHOT_BYTES),
   close: vi.fn(async () => {}),
 };
 const mockBrowser = {
@@ -48,7 +53,7 @@ describe("capturePageScreenshot", () => {
     const result = await capturePageScreenshot(browser, pdfBytes, 3);
 
     expect(result).not.toBeNull();
-    expect(new Uint8Array(result as ArrayBuffer)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(new Uint8Array(result as ArrayBuffer)).toEqual(FAKE_SCREENSHOT_BYTES);
     expect(mockPage.goto).toHaveBeenCalledTimes(1);
     const [url] = mockPage.goto.mock.calls[0];
     expect(url).toContain("data:application/pdf;base64,");
@@ -70,6 +75,17 @@ describe("capturePageScreenshot", () => {
     expect(url).toContain("statusbar=0");
   });
 
+  it("requests page-fit zoom, so the target page fills the frame instead of being a small fraction of a continuous-scroll view that spills into the next page", async () => {
+    mockPage.goto.mockClear();
+    const browser = (await launchScreenshotBrowser(makeEnv()))!;
+    const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake").buffer;
+
+    await capturePageScreenshot(browser, pdfBytes, 1);
+
+    const [url] = mockPage.goto.mock.calls[0];
+    expect(url).toContain("zoom=page-fit");
+  });
+
   it("sets a larger viewport before navigating, so more of the page is captured than Puppeteer's small default", async () => {
     mockPage.setViewport.mockClear();
     const browser = (await launchScreenshotBrowser(makeEnv()))!;
@@ -81,6 +97,16 @@ describe("capturePageScreenshot", () => {
     const [{ width, height }] = mockPage.setViewport.mock.calls[0] as [{ width: number; height: number }];
     expect(width).toBeGreaterThanOrEqual(1200);
     expect(height).toBeGreaterThanOrEqual(1200);
+  });
+
+  it("discards an implausibly small screenshot as a likely-blank capture, returning null", async () => {
+    const browser = (await launchScreenshotBrowser(makeEnv()))!;
+    mockPage.screenshot.mockResolvedValueOnce(new Uint8Array([1, 2, 3]));
+    const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake").buffer;
+
+    const result = await capturePageScreenshot(browser, pdfBytes, 1);
+
+    expect(result).toBeNull();
   });
 
   it("returns null (never throws) when navigation or screenshot fails", async () => {

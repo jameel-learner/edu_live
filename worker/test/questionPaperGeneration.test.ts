@@ -33,6 +33,12 @@ describe("buildGenerationPrompt", () => {
       expect(user).toContain(String(slot.marks));
     }
   });
+
+  it("instructs the model to embed lettered options for mcq/assertion_reason and to return correctAnswer for every question", () => {
+    const { user } = buildGenerationPrompt(blueprint, chaptersWithSlots);
+    expect(user).toContain("(A)");
+    expect(user).toContain("correctAnswer");
+  });
 });
 
 function totalQuestionCount(bp = blueprint) {
@@ -63,6 +69,26 @@ describe("parseAndValidateGeneratedPaper", () => {
     // marksTotal reflects what's actually on the paper (the first blueprint
     // slot's marks), not the blueprint's nominal total.
     expect(result.marksTotal).toBe(blueprint.slots[0].marks);
+  });
+
+  it("carries correctAnswer through onto each generated question when the LLM provides it", () => {
+    const questions = Array.from({ length: totalQuestionCount() }, (_, i) => ({
+      section: "A",
+      questionType: "mcq",
+      marks: 1,
+      text: `Question ${i}`,
+      correctAnswer: `(B) because reason ${i}`,
+    }));
+    const raw = JSON.stringify({ questions });
+    const result = parseAndValidateGeneratedPaper(raw, blueprint);
+    const flat = result.sections.flatMap((s) => s.questions);
+    expect(flat.every((q, i) => q.correctAnswer === `(B) because reason ${i}`)).toBe(true);
+  });
+
+  it("omits correctAnswer when the LLM doesn't provide one, rather than defaulting to an empty string", () => {
+    const raw = JSON.stringify({ questions: [{ section: "A", questionType: "mcq", marks: 1, text: "no answer given" }] });
+    const result = parseAndValidateGeneratedPaper(raw, blueprint);
+    expect(result.sections[0].questions[0].correctAnswer).toBeUndefined();
   });
 
   it("throws GenerationError when the LLM returns zero questions", () => {

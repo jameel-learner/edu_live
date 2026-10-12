@@ -178,6 +178,9 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     let answer: string;
     let llmProvider: string = config.llmProvider;
     let llmModel: string = config.llmModelSlug;
+    let llmInputTokens: number | null = null;
+    let llmOutputTokens: number | null = null;
+    let llmCostUsd = 0;
     if (config.hardFailNoDocument && docSources.length === 0 && webSources.length === 0) {
       answer = HARD_FAIL_MESSAGE;
     } else {
@@ -193,6 +196,9 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
       answer = generateResult.text;
       llmProvider = generateResult.provider;
       llmModel = generateResult.model;
+      llmInputTokens = generateResult.inputTokens ?? null;
+      llmOutputTokens = generateResult.outputTokens ?? null;
+      llmCostUsd = generateResult.costUsd ?? 0;
     }
 
     const trace = buildTransactionTrace({
@@ -207,6 +213,9 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
       jevEnabled,
       jevModel,
       jevCostUsd: jevResult.costUsd,
+      inputTokens: llmInputTokens,
+      outputTokens: llmOutputTokens,
+      llmCostUsd,
     });
     ctx.waitUntil(recordTransaction(env, trace));
 
