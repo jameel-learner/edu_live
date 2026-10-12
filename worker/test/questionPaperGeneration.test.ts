@@ -344,7 +344,7 @@ describe("prompt chapter coverage", () => {
     }));
     const sampled = sampleChunkText({ filename: "big.pdf", chunkCount: 50, chunks });
 
-    expect(sampled.length).toBeLessThanOrEqual(6000);
+    expect(sampled.length).toBeLessThanOrEqual(10000);
     expect(sampled).toContain("CHUNK-0 ");
     expect(sampled).toContain("CHUNK-49 ");
     expect(sampled).toMatch(/CHUNK-2\d /);

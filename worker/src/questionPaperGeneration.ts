@@ -32,7 +32,12 @@ export interface GeneratedPaper {
 
 export class GenerationError extends Error {}
 
-const MAX_CHUNK_CHARS_PER_CHAPTER = 6000; // bounds prompt size regardless of chapter length
+// Bounds prompt size regardless of chapter length. Raised from 6000 so a
+// short, already-complete source document (e.g. a past CBSE test paper with
+// its own answer key, commonly 6-10k chars once enriched) fits in full
+// rather than being evenly sampled down - sampling would otherwise risk
+// separating a question from its own answer, which live on different pages.
+const MAX_CHUNK_CHARS_PER_CHAPTER = 10000;
 // Smallest useful excerpt per sampled chunk - below this, an excerpt is too
 // short to set a question from, so fewer (evenly spaced) chunks are sampled.
 const MIN_EXCERPT_CHARS = 400;
@@ -97,8 +102,15 @@ export function buildGenerationPrompt(
     "You are an experienced CBSE/ICSE class 10 teacher setting an exam paper. " +
     "Follow the exact slot list given. Stay within standard NCERT/CBSE/ICSE class 10 syllabus " +
     "conventions. Prefer the provided source text; where it's thin, use your own syllabus " +
-    "knowledge rather than inventing facts. Return ONLY valid JSON matching the schema described, " +
-    "with no markdown fences and no commentary.";
+    "knowledge rather than inventing facts. " +
+    "If the source text is itself already a ready-made question paper (a numbered list of questions, " +
+    "often followed by its own 'Answers' section with the correct solutions), those questions and answers " +
+    "are pre-verified exam content - for any slot whose type and marks match one of them, copy that " +
+    "question's wording and its given answer verbatim rather than writing a new question or working out " +
+    "the answer yourself. Only compose an original question for a slot when no matching pre-existing " +
+    "question is left to reuse (e.g. the slot asks for a type, like assertion_reason, that the source " +
+    "doesn't contain). Return ONLY valid JSON matching the schema described, with no markdown fences and " +
+    "no commentary.";
 
   const slotLines = chapterSlotsInOrder(chaptersWithSlots)
     .map(
@@ -127,7 +139,8 @@ export function buildGenerationPrompt(
     `assertion and reason relate. For every question of every type, also return "correctAnswer": a short string ` +
     `giving the correct option letter (for mcq/assertion_reason, e.g. "(B)") or the correct final value/result (for ` +
     `short_answer/long_answer/case_based) - this must be determinable from the source material or standard syllabus ` +
-    `knowledge, never omitted and never invented without basis.\n\n` +
+    `knowledge, never omitted and never invented without basis. If the source text includes an official answer for ` +
+    `a question you reused verbatim, "correctAnswer" must be that official answer, not a re-derived one.\n\n` +
     `Return JSON: {"questions": [{"section": string, "questionType": string, "marks": number, "text": string, ` +
     `"correctAnswer": string, "latex"?: string, "table"?: {"headers": string[], "rows": string[][]}}]}. The questions ` +
     `array must contain exactly the total count across all slots, in the same order as the slot list.`;

@@ -31,7 +31,11 @@ Policy:
 - If the context contains a '[Figure: ...]' marker (a description of a diagram, structural formula, or
   image from the source material), do not try to redraw, reproduce, or transcribe that figure as text or
   ASCII art - a real image of that page is shown to the student separately. Refer to it in prose using
-  its description instead.`;
+  its description instead.
+- The context may contain mathematical or chemical formulas written in LaTeX, delimited with $...$
+  (inline) or $$...$$ (block) - e.g. $C_nH_{2n+2}$. Reproduce these formulas exactly as they appear in
+  the context, delimiters included - the student's app renders this LaTeX as typeset notation, so never
+  strip the $ delimiters, rewrite them in plain text, or drop the underscores/braces.`;
 
 export type AnswerStyle = "auto" | "short" | "detailed";
 

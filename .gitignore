@@ -1,5 +1,7 @@
 # Secrets
 .env
+.dev.vars
+worker/.dev.vars
 
 # Python
 venv/

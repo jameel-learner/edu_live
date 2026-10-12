@@ -46,6 +46,13 @@ transcribe that figure as text, ASCII art, or a table cell - a real image of tha
 student separately. Just refer to it in prose (e.g. "see the structure shown above") and use its
 description, not an attempted drawing of it, anywhere you'd otherwise need the figure's content.
 
+Formulas in the context: the context may contain mathematical or chemical formulas written in LaTeX,
+delimited with $...$ (inline) or $$...$$ (block) - e.g. $C_nH_{2n+2}$. Reproduce these formulas exactly
+as they appear in the context, delimiters included, in whichever field they land in - "formula",
+"definition", table cells, everything. The app renders this LaTeX as typeset notation, so never strip
+the $ delimiters, rewrite a formula in plain text, or drop the underscores/braces, even inside a table
+cell's JSON string.
+
 ${RESPONSE_SCHEMA_INSTRUCTIONS}`;
 }
 
