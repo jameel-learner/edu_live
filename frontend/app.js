@@ -36,6 +36,23 @@ const qpResult = document.getElementById("qp-result");
 let qpCatalog = [];
 let qpCatalogLoading = false;
 
+// Ingestion re-emits formulas (chemical general formulas like CnH(2n+2),
+// physics/maths equations) as LaTeX so they survive the PDF-to-text pipeline
+// looking the way they do in the source - render that LaTeX in place rather
+// than showing the raw $...$ markup. Operates on existing text nodes only,
+// so it never introduces raw HTML.
+function renderMathIn(el) {
+  if (window.renderMathInElement) {
+    window.renderMathInElement(el, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+      ],
+      throwOnError: false,
+    });
+  }
+}
+
 // Question-paper content comes from an LLM/RAG pipeline and catalog values
 // from upload metadata - escape before every innerHTML interpolation.
 function escapeHtml(value) {
@@ -217,6 +234,7 @@ function renderQuestionPaper(paperId, paper) {
     `<a href="${WORKER_URL}/question-paper/${encodedId}/pdf" target="_blank">Download PDF</a>` +
     `<button type="button" id="qp-answer-key-btn">Generate Answer Key</button>` +
     `</div>${sectionsHtml}<div id="qp-answer-key-result"></div>`;
+  renderMathIn(qpResult);
 
   const answerKeyBtn = document.getElementById("qp-answer-key-btn");
   answerKeyBtn.addEventListener("click", async () => {
@@ -236,6 +254,7 @@ function renderQuestionPaper(paperId, paper) {
       akResult.innerHTML =
         `<h3>Answer Key</h3><ol>${body.answerKey.entries.map((e) => `<li>${escapeHtml(e.answer)}</li>`).join("")}</ol>` +
         `<a href="${WORKER_URL}/question-paper/${encodedId}/answer-key-pdf" target="_blank">Download Answer Key PDF</a>`;
+      renderMathIn(akResult);
     } catch (err) {
       akResult.textContent = `Could not generate the answer key - could not reach the server (${err.message}).`;
     } finally {
@@ -300,6 +319,7 @@ chatForm.addEventListener("submit", async (event) => {
 
       thinkingEl.classList.remove("thinking");
       thinkingEl.textContent = result.answer ?? `Error: ${result.error}`;
+      renderMathIn(thinkingEl);
 
       const imageKeys = (result.docSources ?? [])
         .map((s) => s.pageImageKey)
@@ -438,6 +458,8 @@ function renderExplanation(container, result) {
     link.textContent = "Watch a video about this concept";
     addSection(null, link);
   }
+
+  renderMathIn(container);
 }
 
 function appendMessage(role, text, { thinking = false } = {}) {

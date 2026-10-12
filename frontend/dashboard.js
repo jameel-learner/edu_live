@@ -269,6 +269,15 @@ function wireCleanedTextToggles() {
         try {
           const { text } = await fetchAdmin(`/admin/documents/cleaned?name=${encodeURIComponent(name)}`);
           body.outerHTML = `<pre class="cleaned-text-body">${escapeHtml(text)}</pre>`;
+          if (window.renderMathInElement) {
+            window.renderMathInElement(details, {
+              delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+              ],
+              throwOnError: false,
+            });
+          }
         } catch (err) {
           body.textContent = `Error loading cleaned text: ${err.message}`;
         }
