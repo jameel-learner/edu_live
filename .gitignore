@@ -13,6 +13,7 @@ __pycache__/
 chroma_db/
 app.log
 observability.db
+worker/evals/results/
 
 # Misc local artifacts
 .claude.zip

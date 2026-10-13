@@ -1,0 +1,183 @@
+{
+  "cases": [
+    {
+      "id": "carbon-1",
+      "mode": "chat",
+      "docFilename": "carbon compound notes.pdf",
+      "question": "What is the general formula for alkanes, and why are they called saturated compounds?",
+      "keyFacts": [
+        "the general formula for alkanes is C_nH_{2n+2}",
+        "alkanes contain only single bonds between carbon atoms, which is why they are called saturated compounds"
+      ],
+      "cheapKeywords": ["2n+2", "satur", "single bond"]
+    },
+    {
+      "id": "carbon-2",
+      "mode": "chat",
+      "docFilename": "carbon compound notes.pdf",
+      "question": "What functional group does an alcohol have, and what is its suffix in IUPAC naming?",
+      "keyFacts": ["an alcohol's functional group is -OH (hydroxyl)", "its IUPAC suffix is -ol"],
+      "cheapKeywords": ["OH", "-ol"]
+    },
+    {
+      "id": "carbon-3",
+      "mode": "chat",
+      "docFilename": "carbon compound notes.pdf",
+      "question": "Why does carbon almost always form covalent bonds rather than ionic bonds?",
+      "keyFacts": [
+        "carbon has four electrons in its valence shell",
+        "it is difficult for carbon to gain or lose four electrons to complete its octet, so it shares electrons via covalent bonds instead"
+      ],
+      "cheapKeywords": ["four electrons", "covalent"]
+    },
+    {
+      "id": "carbon-4",
+      "mode": "chat",
+      "docFilename": "carbon compound notes.pdf",
+      "question": "What is catenation?",
+      "keyFacts": [
+        "catenation is the ability of an element (here, carbon) to combine with itself through covalent bonds",
+        "it lets carbon form chains, branched structures, and rings"
+      ],
+      "cheapKeywords": ["catenation", "combine with itself"]
+    },
+    {
+      "id": "carbon-5",
+      "mode": "chat",
+      "docFilename": "carbon compound notes.pdf",
+      "question": "Name the three allotropes of carbon mentioned in the notes.",
+      "keyFacts": ["diamond", "graphite", "buckminsterfullerene"],
+      "cheapKeywords": ["diamond", "graphite", "buckminsterfullerene"]
+    },
+    {
+      "id": "light-1",
+      "mode": "chat",
+      "docFilename": "light notes.pdf",
+      "question": "What is the mirror formula, and what sign does the focal length take for a concave mirror?",
+      "keyFacts": ["the mirror formula is 1/f = 1/v + 1/u", "for a concave mirror, f is negative"],
+      "cheapKeywords": ["1/f", "concave", "negative"]
+    },
+    {
+      "id": "light-2",
+      "mode": "chat",
+      "docFilename": "light notes.pdf",
+      "question": "State Snell's law of refraction.",
+      "keyFacts": [
+        "sin(i)/sin(r) is a constant for a given pair of media",
+        "the incident ray, refracted ray, and normal at the point of incidence are all co-planar"
+      ],
+      "cheapKeywords": ["sin", "constant", "co-planar"]
+    },
+    {
+      "id": "light-3",
+      "mode": "chat",
+      "docFilename": "light notes.pdf",
+      "question": "What kind of image does a convex mirror always form?",
+      "keyFacts": ["a convex mirror always forms a virtual image", "the image is erect and diminished, formed behind the mirror"],
+      "cheapKeywords": ["virtual", "erect", "diminished"]
+    },
+    {
+      "id": "light-4",
+      "mode": "chat",
+      "docFilename": "light notes.pdf",
+      "question": "How is the power of a lens related to its focal length, and what is its unit?",
+      "keyFacts": [
+        "power of a lens is the reciprocal of its focal length (P = 1/f, with f in metres)",
+        "its unit is the dioptre",
+        "power is negative for a concave lens and positive for a convex lens"
+      ],
+      "cheapKeywords": ["reciprocal", "dioptre"]
+    },
+    {
+      "id": "light-5",
+      "mode": "chat",
+      "docFilename": "light notes.pdf",
+      "question": "What is the difference between a real image and a virtual image?",
+      "keyFacts": [
+        "a real image can be obtained/formed on a screen",
+        "a virtual image cannot be obtained on a screen"
+      ],
+      "cheapKeywords": ["real image", "virtual image", "screen"]
+    },
+    {
+      "id": "lifeproc-1",
+      "mode": "chat",
+      "docFilename": "life Processes notes.pdf",
+      "question": "Write the word/chemical equation for photosynthesis and name the raw materials required.",
+      "keyFacts": [
+        "photosynthesis: carbon dioxide + water, in the presence of sunlight (and chlorophyll), produces carbohydrate (glucose) + oxygen",
+        "chlorophyll, sunlight, CO2, and water are the essential raw materials"
+      ],
+      "cheapKeywords": ["chlorophyll", "sunlight", "carbon dioxide"]
+    },
+    {
+      "id": "lifeproc-2",
+      "mode": "chat",
+      "docFilename": "life Processes notes.pdf",
+      "question": "What is the function of villi in the small intestine?",
+      "keyFacts": ["villi are finger-like projections in the small intestine lining", "they increase surface area for more efficient absorption of digested food"],
+      "cheapKeywords": ["villi", "surface area", "absorption"]
+    },
+    {
+      "id": "lifeproc-3",
+      "mode": "chat",
+      "docFilename": "life Processes notes.pdf",
+      "question": "Compare the ATP yield of aerobic and anaerobic respiration.",
+      "keyFacts": ["aerobic respiration yields 38 ATP", "anaerobic respiration yields only 2 ATP"],
+      "cheapKeywords": ["38 ATP", "2 ATP"]
+    },
+    {
+      "id": "lifeproc-4",
+      "mode": "chat",
+      "docFilename": "life Processes notes.pdf",
+      "question": "What are nephrons, and what are their main components?",
+      "keyFacts": [
+        "nephrons are the basic filtering units of the kidney",
+        "their main components are the glomerulus, Bowman's capsule, and a long renal tube"
+      ],
+      "cheapKeywords": ["nephron", "glomerulus", "Bowman"]
+    },
+    {
+      "id": "lifeproc-5",
+      "mode": "chat",
+      "docFilename": "life Processes notes.pdf",
+      "question": "Which blood vessels in the human body carry oxygenated blood, and is there an exception?",
+      "keyFacts": [
+        "arteries carry oxygenated blood",
+        "the exception is the pulmonary artery, which carries deoxygenated blood"
+      ],
+      "cheapKeywords": ["arteries", "pulmonary artery"]
+    },
+    {
+      "id": "qp-control-coordination",
+      "mode": "questionPaper",
+      "docFilename": "control coordination test.pdf",
+      "subject": "Science",
+      "chapterFilenames": ["control coordination test.pdf"],
+      "marksTotal": 40,
+      "minMarksTotal": 35,
+      "factChecks": [
+        {
+          "id": "qp-1",
+          "keyFacts": ["the hormone that causes uterine contraction leading to labour pain is progesterone"],
+          "cheapKeywords": ["progesterone"]
+        },
+        {
+          "id": "qp-2",
+          "keyFacts": ["the hormone that controls metabolism of calcium and phosphorus in humans is the parathyroid hormone"],
+          "cheapKeywords": ["parathyroid"]
+        },
+        {
+          "id": "qp-3",
+          "keyFacts": ["the movement of a plant shoot towards light is called (positive) phototropism"],
+          "cheapKeywords": ["phototropism"]
+        },
+        {
+          "id": "qp-4",
+          "keyFacts": ["the human brain contains the largest number of neurons in the body"],
+          "cheapKeywords": ["brain", "neuron"]
+        }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import { webSearch, formatWebResultsAsContext } from "./webSearch";
 import { buildTransactionTrace, type TransactionTrace } from "./transactionTrace";
 import { getRuntimeConfig } from "./config";
 import { generateChatCompletion } from "./llm";
+import { isAdminAuthorized } from "./admin";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
 
@@ -96,7 +97,11 @@ async function recordTransaction(env: Env, trace: TransactionTrace): Promise<voi
 }
 
 export async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as { question?: string; answerStyle?: string } | null;
+  const body = (await request.json().catch(() => null)) as {
+    question?: string;
+    answerStyle?: string;
+    modelOverride?: string;
+  } | null;
   const question = body?.question?.trim();
   const answerStyle = parseAnswerStyle(body?.answerStyle);
 
@@ -105,6 +110,15 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
   }
 
   const config = await getRuntimeConfig(env);
+  // modelOverride exists for the manual eval harness (worker/evals/) to test
+  // a candidate model without touching the live config that real traffic
+  // uses - gated behind the same admin key as /admin/*, so an ordinary
+  // student request can never set it.
+  const modelOverride =
+    typeof body?.modelOverride === "string" && body.modelOverride.trim() && isAdminAuthorized(request, env)
+      ? body.modelOverride.trim()
+      : null;
+  const generationConfig = modelOverride ? { ...config, llmModelSlug: modelOverride } : config;
 
   if (config.guardrailEnabled) {
     const decision = await checkQueryInScopeAndAgeAppropriate(question, env.AI);
@@ -180,8 +194,8 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     const jevModel = jevEnabled ? JEV_MODEL_ID : null;
 
     let answer: string;
-    let llmProvider: string = config.llmProvider;
-    let llmModel: string = config.llmModelSlug;
+    let llmProvider: string = generationConfig.llmProvider;
+    let llmModel: string = generationConfig.llmModelSlug;
     let llmInputTokens: number | null = null;
     let llmOutputTokens: number | null = null;
     let llmCostUsd = 0;
@@ -195,7 +209,7 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
         ],
         ANSWER_STYLE_MAX_TOKENS[answerStyle],
         env,
-        config
+        generationConfig
       );
       answer = generateResult.text;
       llmProvider = generateResult.provider;

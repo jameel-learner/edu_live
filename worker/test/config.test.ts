@@ -42,6 +42,7 @@ describe("parseConfigRows", () => {
       conceptExplainerEnabled: false,
       questionPaperModelSlug: "some/qp-model",
       questionPaperImageGenEnabled: false,
+      evalModelSlug: "",
     });
   });
 
@@ -210,9 +211,24 @@ describe("questionPaperModelSlug and questionPaperImageGenEnabled", () => {
     expect(result.questionPaperModelSlug).toBe("some/qp-model");
   });
 
-  it("rejects an empty questionPaperModelSlug and a non-boolean questionPaperImageGenEnabled", () => {
-    expect(validateConfigUpdate({ questionPaperModelSlug: "" })).toHaveLength(1);
+  it("accepts an empty questionPaperModelSlug (clears the override) but rejects a non-string, and rejects a non-boolean questionPaperImageGenEnabled", () => {
+    expect(validateConfigUpdate({ questionPaperModelSlug: "" })).toHaveLength(0);
+    expect(validateConfigUpdate({ questionPaperModelSlug: 123 })).toHaveLength(1);
     expect(validateConfigUpdate({ questionPaperImageGenEnabled: "yes" })).toHaveLength(1);
     expect(validateConfigUpdate({ questionPaperModelSlug: "some/model", questionPaperImageGenEnabled: false })).toHaveLength(0);
+  });
+
+  it("clearing questionPaperModelSlug to empty string falls back to llmModelSlug", () => {
+    const result = parseConfigRows([
+      { key: "llmModelSlug", value: "some/chat-model" },
+      { key: "questionPaperModelSlug", value: "" },
+    ]);
+    expect(result.questionPaperModelSlug).toBe("some/chat-model");
+  });
+
+  it("accepts an empty evalModelSlug but rejects a non-string", () => {
+    expect(validateConfigUpdate({ evalModelSlug: "" })).toHaveLength(0);
+    expect(validateConfigUpdate({ evalModelSlug: "some/model" })).toHaveLength(0);
+    expect(validateConfigUpdate({ evalModelSlug: 123 })).toHaveLength(1);
   });
 });

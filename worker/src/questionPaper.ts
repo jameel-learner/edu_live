@@ -1,5 +1,6 @@
 import type { Env } from "./index";
 import { getRuntimeConfig } from "./config";
+import { isAdminAuthorized } from "./admin";
 import { getBlueprint, distributeSlotsAcrossChapters } from "./questionPaperBlueprints";
 import { fetchAllChapterChunks } from "./questionPaperRetrieval";
 import { generatePaper, GenerationError } from "./questionPaperGeneration";
@@ -46,6 +47,7 @@ interface GenerateRequestBody {
   subject: string;
   chapterFilenames: string[];
   marksTotal: number;
+  modelOverride?: string;
 }
 
 export async function handleQuestionPaperGenerate(request: Request, env: Env): Promise<Response> {
@@ -80,7 +82,19 @@ export async function handleQuestionPaperGenerate(request: Request, env: Env): P
       return Response.json({ error: `No question paper template is available yet for ${body.subject}` }, { status: 400 });
     }
 
-    const cacheKey = computeCacheKey(body.subject, body.marksTotal, body.chapterFilenames, blueprint.version);
+    // modelOverride exists for the manual eval harness (worker/evals/) to test
+    // a candidate model without touching the live config real traffic uses -
+    // gated behind the same admin key as /admin/*. The cache key folds the
+    // override in (rather than bypassing the cache entirely) so an eval rerun
+    // against the same model reuses its own result instead of re-paying for
+    // generation, while never colliding with or overwriting the real
+    // production cache entry for this subject/chapters/marks combination.
+    const modelOverride =
+      typeof body.modelOverride === "string" && body.modelOverride.trim() && isAdminAuthorized(request, env)
+        ? body.modelOverride.trim()
+        : null;
+    const cacheKeySubject = modelOverride ? `${body.subject}::eval::${modelOverride}` : body.subject;
+    const cacheKey = computeCacheKey(cacheKeySubject, body.marksTotal, body.chapterFilenames, blueprint.version);
     const cached = await findCachedPaper(env, cacheKey);
     if (cached) {
       return Response.json({ id: cached.id, paper: cached.paperJson, cached: true });
@@ -99,7 +113,7 @@ export async function handleQuestionPaperGenerate(request: Request, env: Env): P
     const id = crypto.randomUUID();
     const generated = await generatePaper(env, blueprint, chaptersWithSlots, id, {
       llmProvider: config.llmProvider,
-      questionPaperModelSlug: config.questionPaperModelSlug,
+      questionPaperModelSlug: modelOverride ?? config.questionPaperModelSlug,
       questionPaperImageGenEnabled: config.questionPaperImageGenEnabled,
     });
 

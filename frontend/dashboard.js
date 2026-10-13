@@ -446,9 +446,23 @@ async function loadSettingsTab() {
           <label>Model (slug)
             <input type="text" name="llmModelSlug" value="${escapeHtml(config.llmModelSlug)}" placeholder="qwen/qwen-2.5-72b-instruct:free" />
           </label>
+          <label title="Model used for Question Paper generation and answer keys. Leave blank to follow the chat model above.">Question Paper Model (slug, optional)
+            <input type="text" name="questionPaperModelSlug" value="${config.questionPaperModelSlug === config.llmModelSlug ? "" : escapeHtml(config.questionPaperModelSlug)}" placeholder="(same as chat model above)" />
+          </label>
           <button type="submit">Save</button>
         </form>
         <p id="llm-status" class="txn-meta"></p>
+      </div>
+      <div class="card">
+        <h2>Evals</h2>
+        <p class="txn-meta">Not used by live chat or question papers. Sets the default model slug the manual eval script (worker/evals/run-evals.js) tests against when no --model flag is passed on the command line.</p>
+        <form id="eval-form" class="settings-form">
+          <label>Eval model (slug)
+            <input type="text" name="evalModelSlug" value="${escapeHtml(config.evalModelSlug)}" placeholder="e.g. a candidate model you're about to try" />
+          </label>
+          <button type="submit">Save</button>
+        </form>
+        <p id="eval-status" class="txn-meta"></p>
       </div>
       <div class="card">
         <h2>Ingestion enrichment</h2>
@@ -515,7 +529,10 @@ async function loadSettingsTab() {
       event.preventDefault();
       const form = event.target;
       const status = document.getElementById("llm-status");
-      const update = { llmModelSlug: form.llmModelSlug.value.trim() };
+      const update = {
+        llmModelSlug: form.llmModelSlug.value.trim(),
+        questionPaperModelSlug: form.questionPaperModelSlug.value.trim(),
+      };
       status.textContent = "Saving...";
       try {
         const response = await fetch(`${WORKER_URL}/admin/config`, {
@@ -526,6 +543,26 @@ async function loadSettingsTab() {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
         status.textContent = "Saved - takes effect on the next question.";
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`;
+      }
+    });
+
+    document.getElementById("eval-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const status = document.getElementById("eval-status");
+      const update = { evalModelSlug: form.evalModelSlug.value.trim() };
+      status.textContent = "Saving...";
+      try {
+        const response = await fetch(`${WORKER_URL}/admin/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...adminHeaders() },
+          body: JSON.stringify(update),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+        status.textContent = "Saved.";
       } catch (err) {
         status.textContent = `Error: ${err.message}`;
       }

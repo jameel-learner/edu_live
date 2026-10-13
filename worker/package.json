@@ -9,7 +9,8 @@
   "scripts": {
     "test": "vitest run",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "eval": "node evals/run-evals.js"
   },
   "keywords": [],
   "author": "",

@@ -20,6 +20,12 @@ export interface RuntimeConfig {
   conceptExplainerEnabled: boolean;
   questionPaperModelSlug: string;
   questionPaperImageGenEnabled: boolean;
+  // Not read by any production code path - purely a convenience field the
+  // manual eval script (worker/evals/run-evals.js) reads via GET /admin/config
+  // as its default --model when none is passed on the command line, so the
+  // "model I'm about to test" can be set once from the dashboard instead of
+  // retyped per run. Empty string means "no default, --model is required".
+  evalModelSlug: string;
 }
 
 // Must match the pre-existing hardcoded behavior exactly, so shipping this
@@ -56,6 +62,7 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   // are the only diagram sources that consistently work. Toggle on from
   // the admin Settings tab only if a better model becomes available.
   questionPaperImageGenEnabled: false,
+  evalModelSlug: "",
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
@@ -88,13 +95,14 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
     conceptExplainerEnabled: map.has("conceptExplainerEnabled")
       ? map.get("conceptExplainerEnabled") === "true"
       : DEFAULT_CONFIG.conceptExplainerEnabled,
-    // No stored override -> follow the CURRENT chat model, so changing
-    // llmModelSlug in Settings also moves question papers unless an admin
-    // explicitly set a question-paper-specific model.
-    questionPaperModelSlug: map.get("questionPaperModelSlug") ?? llmModelSlug,
+    // No stored override (or explicitly cleared to "") -> follow the CURRENT
+    // chat model, so changing llmModelSlug in Settings also moves question
+    // papers unless an admin explicitly set a question-paper-specific model.
+    questionPaperModelSlug: map.get("questionPaperModelSlug")?.trim() || llmModelSlug,
     questionPaperImageGenEnabled: map.has("questionPaperImageGenEnabled")
       ? map.get("questionPaperImageGenEnabled") === "true"
       : DEFAULT_CONFIG.questionPaperImageGenEnabled,
+    evalModelSlug: map.get("evalModelSlug") ?? DEFAULT_CONFIG.evalModelSlug,
   };
 }
 
@@ -114,6 +122,7 @@ const KNOWN_FIELDS = new Set([
   "conceptExplainerEnabled",
   "questionPaperModelSlug",
   "questionPaperImageGenEnabled",
+  "evalModelSlug",
 ]);
 
 // Cloudflare Vectorize rejects a query above its own topK ceiling, and a
@@ -182,9 +191,10 @@ export function validateConfigUpdate(input: Record<string, unknown>): { field: s
     }
   }
   if ("questionPaperModelSlug" in input) {
-    const v = input.questionPaperModelSlug;
-    if (typeof v !== "string" || v.trim().length === 0) {
-      errors.push({ field: "questionPaperModelSlug", message: "questionPaperModelSlug must be a non-empty string" });
+    // Empty string is valid - it clears the override and falls back to
+    // llmModelSlug (see parseConfigRows).
+    if (typeof input.questionPaperModelSlug !== "string") {
+      errors.push({ field: "questionPaperModelSlug", message: "questionPaperModelSlug must be a string" });
     }
   }
   if ("questionPaperImageGenEnabled" in input && typeof input.questionPaperImageGenEnabled !== "boolean") {
@@ -200,6 +210,11 @@ export function validateConfigUpdate(input: Record<string, unknown>): { field: s
   }
   if ("conceptExplainerEnabled" in input && typeof input.conceptExplainerEnabled !== "boolean") {
     errors.push({ field: "conceptExplainerEnabled", message: "conceptExplainerEnabled must be a boolean" });
+  }
+  // Unlike llmModelSlug/ingestionModelSlug, empty string is valid here - it
+  // means "no eval default set", not an error.
+  if ("evalModelSlug" in input && typeof input.evalModelSlug !== "string") {
+    errors.push({ field: "evalModelSlug", message: "evalModelSlug must be a string" });
   }
 
   return errors;
